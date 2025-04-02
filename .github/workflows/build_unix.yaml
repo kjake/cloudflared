@@ -105,24 +105,6 @@ jobs:
             go install golang.org/x/tools/cmd/goimports@latest
             gmake cloudflared cleanup-go
 
-      # Build step for OmniOS
-      - name: Build from Source on OmniOS
-        if: matrix.os == 'omnios'
-        uses: vmactions/omnios-vm@v1
-        with:
-          envs: "GOEXPERIMENT CGO_ENABLED"
-          usesh: true
-          mem: 4096
-          prepare: |
-            pkg install -n gmake sudo bash git go curl wget fakeroot libffi rubygem-fpm
-            git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
-          run: |
-            gmake install-go
-            go mod download
-            go mod tidy
-            go install golang.org/x/tools/cmd/goimports@latest
-            gmake cloudflared cleanup-go
-
       # Build step for OpenBSD
       - name: Build from Source on OpenBSD
         if: matrix.os == 'openbsd'
@@ -142,6 +124,24 @@ jobs:
             go install golang.org/x/tools/cmd/goimports@latest
             gmake cloudflared cleanup-go
 
+      # Build step for OmniOS
+      - name: Build from Source on OmniOS
+        if: matrix.os == 'omnios'
+        uses: vmactions/omnios-vm@v1
+        with:
+          envs: "GOEXPERIMENT CGO_ENABLED"
+          usesh: true
+          mem: 4096
+          prepare: |
+            pkg install -n gmake sudo bash git go curl wget fakeroot libffi rubygem-fpm
+            git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
+          run: |
+            gmake install-go
+            go mod download
+            go mod tidy
+            go install golang.org/x/tools/cmd/goimports@latest
+            gmake cloudflared cleanup-go
+
       # Build step for Solaris
       - name: Build from Source on Solaris
         if: matrix.os == 'solaris'
@@ -151,7 +151,7 @@ jobs:
           usesh: true
           mem: 4096
           prepare: |
-            pkg install -y gmake sudo bash git go curl wget fakeroot libffi rubygem-fpm
+            pkg install -n gmake sudo bash git go curl wget fakeroot libffi rubygem-fpm
             git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
           run: |
             gmake install-go
