@@ -92,7 +92,11 @@ jobs:
           usesh: true
           mem: 4096
           prepare: |
-            pkgin -y install gmake sudo%stable bash git go curl wget fakeroot libffi rubygem-fpm
+            export PATH=/usr/sbin:$PATH
+            export PKG_PATH=ftp://ftp.netbsd.org/pub/pkgsrc/packages/NetBSD/amd64/10.1/All
+            pkg_add pkgin
+            pkgin -y install gmake sudo bash git go golangci-lint curl wget fakeroot libffi ruby
+            gem install fpm
             git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
           run: |
             gmake install-go
@@ -128,7 +132,8 @@ jobs:
           usesh: true
           mem: 4096
           prepare: |
-            pkg_add gmake sudo%stable bash git go curl wget fakeroot libffi rubygem-fpm
+            pkg_add -xaz gmake sudo-- bash git go curl wget fakeroot libffi ruby-33
+            gem33 install fpm
             git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
           run: |
             gmake install-go
