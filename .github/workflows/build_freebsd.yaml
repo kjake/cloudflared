@@ -30,7 +30,6 @@ jobs:
           ref: ${{ steps.release_details.outputs.result.tag_name }}
           fetch-depth: 0
           fetch-tags: true
-          set-safe-directory: "/home/runner/work/cloudflared/cloudflared"
 
       - name: Build from Source on FreeBSD
         id: build_freebsd
@@ -42,7 +41,8 @@ jobs:
           # Targeting FreeBSD 14.1 (as used by OPNsense)
           release: "14.1"
           prepare: |
-            pkg install -y gmake sudo bash git go golangci-lint curl wget fakeroot libffi rubygem-fpm 
+            pkg install -y gmake sudo bash git go golangci-lint curl wget fakeroot libffi rubygem-fpm
+            git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
           run: |
             gmake install-go
             go mod download
