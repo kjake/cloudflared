@@ -90,8 +90,9 @@ jobs:
           prepare: |
             export PATH=/usr/sbin:$PATH
             export PKG_PATH=ftp://ftp.netbsd.org/pub/pkgsrc/packages/NetBSD/amd64/10.1/All
-            pkg_add pkgin
-            pkgin -y install gmake sudo bash git go golangci-lint curl wget fakeroot libffi ruby
+            pkg_add -U pkgin
+            pkgin -y install gmake sudo bash git go golangci-lint curl wget fakeroot libffi ruby32 pkg_alternatives
+            pkg_alternatives rebuild
             gem install fpm
             git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
           run: |
