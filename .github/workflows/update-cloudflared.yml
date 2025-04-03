@@ -47,12 +47,14 @@ jobs:
         run: |
           git remote add upstream https://github.com/cloudflare/cloudflared.git || true
           git fetch upstream tag ${{ steps.get_release.outputs.tag }} --depth=1
-          git checkout -b update-cloudflared-${{ steps.get_release.outputs.tag }} FETCH_HEAD
+          # Detach HEAD to avoid inheriting your fork's master history.
+          git checkout --detach FETCH_HEAD
+          git checkout -B update-cloudflared-${{ steps.get_release.outputs.tag }}
 
       # Step 5: Push the new branch to the current repository.
       - name: Push branch to origin
         run: |
-          git push origin update-cloudflared-${{ steps.get_release.outputs.tag }}
+          git push origin update-cloudflared-${{ steps.get_release.outputs.tag }} --force
 
       # Step 6: Create a Pull Request from the new branch (head) to kjake/cloudflared:master.
       - name: Create Pull Request from upstream tag branch
