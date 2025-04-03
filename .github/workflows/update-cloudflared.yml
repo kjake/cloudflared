@@ -1,0 +1,118 @@
+name: Update cloudflared Release
+
+on:
+  # Run on a schedule (e.g. every hour) and on manual dispatch.
+  schedule:
+    - cron: "0 */1 * * *"
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      # Check out the current repo.
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Step 1: Fetch the latest release info from upstream.
+      - name: Get latest upstream release info
+        id: get_release
+        run: |
+          echo "Fetching latest release info from cloudflare/cloudflared..."
+          # Get the latest release JSON data.
+          release_info=$(curl -s https://api.github.com/repos/cloudflare/cloudflared/releases/latest)
+          # Use jq to parse the JSON (jq is available on ubuntu-latest).
+          tag=$(echo "$release_info" | jq -r .tag_name)
+          title=$(echo "$release_info" | jq -r .name)
+          body=$(echo "$release_info" | jq -r .body)
+          echo "Latest tag: $tag"
+          echo "::set-output name=tag::$tag"
+          echo "::set-output name=title::$title"
+          echo "::set-output name=body::$body"
+
+      # Step 2: Check whether our repo already has this version.
+      # In this example we assume a file named "VERSION" tracks the current version.
+      - name: Check current version
+        id: check_version
+        run: |
+          if [ -f VERSION ]; then
+            current_version=$(cat VERSION)
+          else
+            current_version=""
+          fi
+          echo "Current version: $current_version"
+          echo "New version: ${{ steps.get_release.outputs.tag }}"
+          if [ "$current_version" = "${{ steps.get_release.outputs.tag }}" ]; then
+            echo "Version is already up-to-date. Exiting."
+            exit 0
+          fi
+          echo "New version detected. Proceeding with update."
+
+      # Step 3: Create a branch and update the VERSION file.
+      - name: Create update branch and commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          branch="update-cloudflared-${{ steps.get_release.outputs.tag }}"
+          git checkout -b $branch
+          echo "${{ steps.get_release.outputs.tag }}" > VERSION
+          git add VERSION
+          git commit -m "Update cloudflared to version ${{ steps.get_release.outputs.tag }}"
+          git push origin $branch
+
+      # Step 4: Open a pull request with the changes.
+      - name: Create Pull Request
+        id: pr
+        uses: peter-evans/create-pull-request@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          title: "Update cloudflared to ${{ steps.get_release.outputs.tag }}"
+          body: |
+            This PR updates cloudflared to version ${{ steps.get_release.outputs.tag }}.
+
+            **Upstream Release Title:** ${{ steps.get_release.outputs.title }}
+
+            **Release Notes:**
+            ${{ steps.get_release.outputs.body }}
+          base: main
+          branch: update-cloudflared-${{ steps.get_release.outputs.tag }}
+          commit-message: "Update cloudflared to version ${{ steps.get_release.outputs.tag }}"
+
+      # Step 5 (Optional): If the PR is mergeable, auto-merge it.
+      - name: Auto-merge Pull Request if mergeable
+        if: steps.pr.outputs.pull-request-number != ''
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr_number = parseInt(process.env.PR_NUMBER || '${{ steps.pr.outputs.pull-request-number }}');
+            const { data: pr } = await github.pulls.get({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              pull_number: pr_number
+            });
+            if (pr.mergeable) {
+              console.log("PR is mergeable. Merging now...");
+              await github.pulls.merge({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                pull_number: pr_number,
+                commit_title: pr.title,
+                commit_message: pr.body,
+                merge_method: "squash"
+              });
+            } else {
+              console.log("PR is not mergeable at this time.");
+            }
+          env:
+            PR_NUMBER: ${{ steps.pr.outputs.pull-request-number }}
+
+      # Step 6 (Optional): If the auto-merge was successful, create a GitHub release.
+      - name: Create Release
+        if: steps.pr.outputs.pull-request-number != ''
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ steps.get_release.outputs.tag }}
+          release_name: ${{ steps.get_release.outputs.title }}
+          body: ${{ steps.get_release.outputs.body }}
