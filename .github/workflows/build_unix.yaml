@@ -11,8 +11,6 @@ jobs:
     strategy:
       matrix:
         include:
-          - os: dragonfly
-            assetName: cloudflared-dragonfly6-amd64
           - os: freebsd
             assetName: cloudflared-freebsd14-amd64
           - os: netbsd
@@ -41,24 +39,6 @@ jobs:
           ref: ${{ steps.release_details.outputs.result.tag_name }}
           fetch-depth: 0
           fetch-tags: true
-
-      # Build step for DragonFlyBSD
-      - name: Build from Source on DragonFlyBSD
-        if: matrix.os == 'dragonfly'
-        uses: vmactions/dragonflybsd-vm@v1
-        with:
-          envs: "GOEXPERIMENT CGO_ENABLED"
-          usesh: true
-          mem: 4096
-          prepare: |
-            pkg install -y gmake sudo bash git go curl wget fakeroot libffi rubygem-fpm
-            git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
-          run: |
-            gmake install-go
-            go mod download
-            go mod tidy
-            go install golang.org/x/tools/cmd/goimports@latest
-            gmake cloudflared cleanup-go
 
       # Build step for FreeBSD
       - name: Build from Source on FreeBSD
