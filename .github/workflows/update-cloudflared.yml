@@ -1,0 +1,57 @@
+name: Stage cloudflared Release
+
+on:
+  schedule:
+    - cron: "0 */1 * * *"
+  workflow_dispatch:
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    steps:
+      # Step 1: Check out the current repository
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      # Step 2: Fetch the latest release info from cloudflare/cloudflared.
+      - name: Get latest upstream release info
+        id: get_release
+        run: |
+          echo "Fetching latest release info from cloudflare/cloudflared..."
+          release_info=$(curl -s https://api.github.com/repos/cloudflare/cloudflared/releases/latest)
+          tag=$(echo "$release_info" | jq -r .tag_name)
+          title=$(echo "$release_info" | jq -r .name)
+          echo "Latest tag: $tag"
+          echo "tag=$tag" >> $GITHUB_OUTPUT
+          echo "title=$title" >> $GITHUB_OUTPUT
+
+      # Step 3: Check if the current version already matches the upstream release.
+      - name: Check current version
+        id: check_version
+        run: |
+          if [ -f RELEASE_NOTES ]; then
+            current_version=$(head -1 RELEASE_NOTES)
+          else
+            current_version=""
+          fi
+          echo "Current version: $current_version"
+          echo "New version: ${{ steps.get_release.outputs.tag }}"
+          if [ "$current_version" = "${{ steps.get_release.outputs.tag }}" ]; then
+            echo "Version is already up-to-date. Exiting."
+            exit 0
+          fi
+          echo "New version detected. Proceeding with update."
+
+      # Step 4: Add the upstream remote and fetch the tag, then create a new branch from it.
+      - name: Add upstream remote and fetch tag
+        run: |
+          git remote add upstream https://github.com/cloudflare/cloudflared.git || true
+          git fetch upstream tag ${{ steps.get_release.outputs.tag }} --depth=1
+          # Detach HEAD to avoid inheriting your fork's master history.
+          git checkout --detach FETCH_HEAD
+          git checkout -B update-cloudflared-${{ steps.get_release.outputs.tag }}
+
+      # Step 5: Push the new branch to the current repository.
+      - name: Push branch to origin
+        run: |
+          git push origin update-cloudflared-${{ steps.get_release.outputs.tag }} --force

@@ -1,0 +1,125 @@
+name: Build Native
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        include:
+          - os: freebsd
+            assetName: cloudflared-freebsd14-amd64
+          - os: netbsd
+            assetName: cloudflared-netbsd10-amd64
+          - os: openbsd
+            assetName: cloudflared-openbsd7-amd64
+    env:
+      GOEXPERIMENT: "noboringcrypto"
+      CGO_ENABLED: 0
+    steps:
+      - name: Get Release Details
+        id: release_details
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { data: release } = await github.rest.repos.getLatestRelease({
+              owner: context.repo.owner,
+              repo: context.repo.repo
+            });
+            core.info(`Building for release tag: ${release.tag_name}`);
+            return release;
+
+      - name: Checkout Release Tag
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ steps.release_details.outputs.result.tag_name }}
+          fetch-depth: 0
+          fetch-tags: true
+
+      # Build step for FreeBSD
+      - name: Build from Source on FreeBSD
+        if: matrix.os == 'freebsd'
+        uses: vmactions/freebsd-vm@v1
+        with:
+          release: "14.2"
+          envs: "GOEXPERIMENT CGO_ENABLED"
+          usesh: true
+          mem: 4096
+          prepare: |
+            pkg install -y gmake sudo bash git go golangci-lint curl wget fakeroot libffi rubygem-fpm
+            git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
+          run: |
+            gmake install-go
+            go mod download
+            go mod tidy
+            go install golang.org/x/tools/cmd/goimports@latest
+            gmake cloudflared cleanup-go
+
+      # Build step for NetBSD
+      - name: Build from Source on NetBSD
+        if: matrix.os == 'netbsd'
+        uses: vmactions/netbsd-vm@v1
+        with:
+          envs: "GOEXPERIMENT CGO_ENABLED"
+          usesh: true
+          mem: 4096
+          prepare: |
+            export PATH=/usr/sbin:$PATH
+            export PKG_PATH=ftp://ftp.netbsd.org/pub/pkgsrc/packages/NetBSD/amd64/10.1/All
+            pkg_add -U pkgin
+            pkgin -y install gmake sudo bash git go golangci-lint curl wget fakeroot libffi ruby32 pkg_alternatives
+            pkg_alternatives rebuild
+            gem install fpm
+            git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
+          run: |
+            gmake install-go
+            go mod download
+            go mod tidy
+            go install golang.org/x/tools/cmd/goimports@latest
+            gmake cloudflared cleanup-go
+
+      # Build step for OpenBSD
+      - name: Build from Source on OpenBSD
+        if: matrix.os == 'openbsd'
+        uses: vmactions/openbsd-vm@v1
+        with:
+          envs: "GOEXPERIMENT CGO_ENABLED"
+          usesh: true
+          mem: 4096
+          prepare: |
+            pkg_add -xaz gmake sudo-- bash git go curl wget fakeroot libffi ruby-33
+            gem33 install fpm
+            git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
+          run: |
+            gmake install-go
+            go mod download
+            go mod tidy
+            go install golang.org/x/tools/cmd/goimports@latest
+            gmake cloudflared cleanup-go
+
+      # Upload asset (this step can use expressions since it's a script)
+      - name: Upload Release Asset
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const assetPath = 'cloudflared';
+            const assetName = '${{ matrix.assetName }}';
+            const release = ${{ steps.release_details.outputs.result }};
+            const fileData = fs.readFileSync(assetPath);
+            const { data: asset } = await github.rest.repos.uploadReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              release_id: release.id,
+              name: assetName,
+              data: fileData,
+              headers: {
+                'content-type': 'application/octet-stream'
+              }
+            });
+            core.info(`Uploaded asset: ${asset.name}`);
+            return asset;
