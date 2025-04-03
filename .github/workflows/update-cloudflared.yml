@@ -49,14 +49,14 @@ jobs:
         with:
           script: |
             const tag = "${{ steps.get_release.outputs.tag }}";
-            const prTitle = "Update cloudflared to ${tag}";
-            const prBody = "This PR updates cloudflared to version ${tag}.";
+            const prTitle = `Update cloudflared to ${tag}`;
+            const prBody = `This PR updates cloudflared to version ${tag}.`;
             const response = await github.rest.pulls.create({
               owner: context.repo.owner,
               repo: context.repo.repo,
               title: prTitle,
               body: prBody,
-              head: "cloudflare:${tag}",
+              head: `cloudflare:${tag}`,
               head_repo: "cloudflared",
               base: "master"
             });
