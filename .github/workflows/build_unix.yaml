@@ -17,12 +17,8 @@ jobs:
             assetName: cloudflared-freebsd14-amd64
           - os: netbsd
             assetName: cloudflared-netbsd10-amd64
-          - os: omnios
-            assetName: cloudflared-omnios-amd64
           - os: openbsd
             assetName: cloudflared-openbsd7-amd64
-          - os: solaris
-            assetName: cloudflared-solaris11-amd64
     env:
       GOEXPERIMENT: "noboringcrypto"
       CGO_ENABLED: 0
@@ -116,42 +112,6 @@ jobs:
           prepare: |
             pkg_add -xaz gmake sudo-- bash git go curl wget fakeroot libffi ruby-33
             gem33 install fpm
-            git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
-          run: |
-            gmake install-go
-            go mod download
-            go mod tidy
-            go install golang.org/x/tools/cmd/goimports@latest
-            gmake cloudflared cleanup-go
-
-      # Build step for OmniOS
-      - name: Build from Source on OmniOS
-        if: matrix.os == 'omnios'
-        uses: vmactions/omnios-vm@v1
-        with:
-          envs: "GOEXPERIMENT CGO_ENABLED"
-          usesh: true
-          mem: 4096
-          prepare: |
-            pkg install -n gmake sudo bash git go curl wget fakeroot libffi rubygem-fpm
-            git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
-          run: |
-            gmake install-go
-            go mod download
-            go mod tidy
-            go install golang.org/x/tools/cmd/goimports@latest
-            gmake cloudflared cleanup-go
-
-      # Build step for Solaris
-      - name: Build from Source on Solaris
-        if: matrix.os == 'solaris'
-        uses: vmactions/solaris-vm@v1
-        with:
-          envs: "GOEXPERIMENT CGO_ENABLED"
-          usesh: true
-          mem: 4096
-          prepare: |
-            pkg install -n gmake sudo bash git go curl wget fakeroot libffi rubygem-fpm
             git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
           run: |
             gmake install-go
