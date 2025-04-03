@@ -59,7 +59,7 @@ jobs:
           assignees: ${{ github.repository_owner }}
           reviewers: ${{ github.repository_owner }}
           base: master
-          branch: ${{ steps.get_release.outputs.tag }} https://github.com/cloudflare/cloudflared
+          branch: ${{ steps.get_release.outputs.tag }}
           commit-message: "Update cloudflared to version ${{ steps.get_release.outputs.tag }}"
 
       # Step 4 (Optional): If the PR is mergeable, auto-merge it.
