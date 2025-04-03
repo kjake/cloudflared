@@ -45,17 +45,7 @@ jobs:
           fi
           echo "New version detected. Proceeding with update."
 
-      # Step 3: Create a branch for new version
-      - name: Create update branch and commit changes
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          branch="update-cloudflared-${{ steps.get_release.outputs.tag }}"
-          git checkout -b $branch
-          git commit -m "Update cloudflared to version ${{ steps.get_release.outputs.tag }}"
-          git push origin $branch
-
-      # Step 4: Open a pull request with the changes.
+      # Step 3: Open a pull request with the changes.
       - name: Create Pull Request
         id: pr
         uses: peter-evans/create-pull-request@v4
@@ -68,18 +58,17 @@ jobs:
             automated pr
           assignees: ${{ github.repository_owner }}
           reviewers: ${{ github.repository_owner }}
-          branch: update-cloudflared-${{ steps.get_release.outputs.tag }}
+          base: master
+          branch: ${{ steps.get_release.outputs.tag }} https://github.com/cloudflare/cloudflared
           commit-message: "Update cloudflared to version ${{ steps.get_release.outputs.tag }}"
 
-      # Step 5 (Optional): If the PR is mergeable, auto-merge it.
+      # Step 4 (Optional): If the PR is mergeable, auto-merge it.
       - name: Auto-merge Pull Request if mergeable
-        if: steps.pr.outputs.pull-request-number != ''
+        if: ${{ steps.pr.outputs.pull-request-number }}
         uses: actions/github-script@v6
-        env:
-          PR_NUMBER: ${{ steps.pr.outputs.pull-request-number }}
         with:
           script: |
-            const pr_number = parseInt(process.env.PR_NUMBER || '${{ steps.pr.outputs.pull-request-number }}');
+            const pr_number = '${{ steps.pr.outputs.pull-request-number }}';
             const { data: pr } = await github.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -99,9 +88,9 @@ jobs:
               console.log("PR is not mergeable at this time.");
             }
 
-      # Step 6 (Optional): If the auto-merge was successful, create a GitHub release.
+      # Step 5 (Optional): If the auto-merge was successful, create a GitHub release.
       - name: Create Release
-        if: steps.pr.outputs.pull-request-number != ''
+        if: ${{ steps.pr.outputs.pull-request-number }}
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
