@@ -42,34 +42,40 @@ jobs:
           fi
           echo "New version detected. Proceeding with update."
 
-      # Step 4: Create a pull request with base as kjake/cloudflared:master and head as cloudflare/cloudflared:tag.
-      - name: Create Pull Request from upstream tag
-        id: create_pr
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const tag = "${{ steps.get_release.outputs.tag }}";
-            const prTitle = `Update cloudflared to ${tag}`;
-            const prBody = `This PR updates cloudflared to version ${tag}.`;
-            const response = await github.rest.pulls.create({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              title: prTitle,
-              body: prBody,
-              head: `cloudflare:${tag}`,
-              head_repo: "cloudflared",
-              base: "master"
-            });
-            console.log("Created PR #", response.data.number);
-            return { pr_number: response.data.number };
+      # Step 4: Add the upstream remote and fetch the tag, then create a new branch from it.
+      - name: Add upstream remote and fetch tag
+        run: |
+          git remote add upstream https://github.com/cloudflare/cloudflared.git || true
+          git fetch upstream tag ${{ steps.get_release.outputs.tag }} --depth=1
+          git checkout -b update-cloudflared-${{ steps.get_release.outputs.tag }} FETCH_HEAD
 
-      # Step 5 (Optional): If the PR is mergeable, auto-merge it.
+      # Step 5: Push the new branch to our repository.
+      - name: Push branch to origin
+        run: |
+          git push origin update-cloudflared-${{ steps.get_release.outputs.tag }}
+
+      # Step 6: Create a Pull Request from the new branch (head) to kjake/cloudflared:master.
+      - name: Create Pull Request from upstream tag branch
+        id: create_pr
+        uses: peter-evans/create-pull-request@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          title: "Update cloudflared to ${{ steps.get_release.outputs.tag }}"
+          body: |
+            This PR updates cloudflared to version ${{ steps.get_release.outputs.tag }}.
+          base: master
+          branch: update-cloudflared-${{ steps.get_release.outputs.tag }}
+          labels: automated pr
+          assignees: ${{ github.repository_owner }}
+          reviewers: ${{ github.repository_owner }}
+
+      # Step 7 (Optional): If the PR is mergeable, auto-merge it.
       - name: Auto-merge Pull Request if mergeable
-        if: ${{ steps.create_pr.outputs.pr_number }}
+        if: ${{ steps.create_pr.outputs.pull-request-number }}
         uses: actions/github-script@v6
         with:
           script: |
-            const pr_number = parseInt("${{ steps.create_pr.outputs.pr_number }}");
+            const pr_number = parseInt("${{ steps.create_pr.outputs.pull-request-number }}");
             const { data: pr } = await github.rest.pulls.get({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -89,9 +95,9 @@ jobs:
               console.log("PR is not mergeable at this time.");
             }
 
-      # Step 6 (Optional): If auto-merge was successful, create a GitHub release.
+      # Step 8 (Optional): If auto-merge was successful, create a GitHub release.
       - name: Create Release
-        if: ${{ steps.create_pr.outputs.pr_number }}
+        if: ${{ steps.create_pr.outputs.pull-request-number }}
         uses: actions/create-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
