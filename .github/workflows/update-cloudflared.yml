@@ -37,13 +37,15 @@ jobs:
           echo "Current version: $current_version"
           echo "New version: ${{ steps.get_release.outputs.tag }}"
           if [ "$current_version" = "${{ steps.get_release.outputs.tag }}" ]; then
-            echo "Version is already up-to-date. Exiting."
-            exit 0
+            echo "up_to_date=true" >> $GITHUB_OUTPUT
+          else
+            echo "up_to_date=false" >> $GITHUB_OUTPUT
+            echo "New version detected. Proceeding with update."
           fi
-          echo "New version detected. Proceeding with update."
 
       # Step 4: Add the upstream remote and fetch the tag, then create a new branch from it.
       - name: Add upstream remote and fetch tag
+        if: steps.check_version.outputs.up_to_date == 'false'
         run: |
           git remote add upstream https://github.com/cloudflare/cloudflared.git || true
           git fetch upstream tag ${{ steps.get_release.outputs.tag }} --depth=1
@@ -53,5 +55,6 @@ jobs:
 
       # Step 5: Push the new branch to the current repository.
       - name: Push branch to origin
+        if: steps.check_version.outputs.up_to_date == 'false'
         run: |
           git push origin update-cloudflared-${{ steps.get_release.outputs.tag }} --force
