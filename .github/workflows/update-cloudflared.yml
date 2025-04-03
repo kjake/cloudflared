@@ -74,7 +74,7 @@ jobs:
 
             **Release Notes:**
             ${{ steps.get_release.outputs.body }}
-          base: main
+          base: master
           branch: update-cloudflared-${{ steps.get_release.outputs.tag }}
           commit-message: "Update cloudflared to version ${{ steps.get_release.outputs.tag }}"
 
@@ -82,6 +82,8 @@ jobs:
       - name: Auto-merge Pull Request if mergeable
         if: steps.pr.outputs.pull-request-number != ''
         uses: actions/github-script@v6
+        env:
+          PR_NUMBER: ${{ steps.pr.outputs.pull-request-number }}
         with:
           script: |
             const pr_number = parseInt(process.env.PR_NUMBER || '${{ steps.pr.outputs.pull-request-number }}');
@@ -103,8 +105,6 @@ jobs:
             } else {
               console.log("PR is not mergeable at this time.");
             }
-          env:
-            PR_NUMBER: ${{ steps.pr.outputs.pull-request-number }}
 
       # Step 6 (Optional): If the auto-merge was successful, create a GitHub release.
       - name: Create Release
