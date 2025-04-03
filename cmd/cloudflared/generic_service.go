@@ -7,6 +7,7 @@ import (
 	"os"
 
 	cli "github.com/urfave/cli/v2"
+
 	"github.com/cloudflare/cloudflared/cmd/cloudflared/cliutil"
 )
 

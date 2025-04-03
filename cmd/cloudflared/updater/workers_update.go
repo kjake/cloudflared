@@ -10,9 +10,9 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"runtime"
-	"strings"
 	"text/template"
 	"time"
 
@@ -134,7 +134,7 @@ func (v *WorkersVersion) Apply() error {
 
 	if err := os.Rename(newFilePath, v.targetPath); err != nil {
 		//attempt rollback
-		os.Rename(oldFilePath, v.targetPath)
+		_ = os.Rename(oldFilePath, v.targetPath)
 		return err
 	}
 	os.Remove(oldFilePath)
@@ -181,7 +181,7 @@ func download(url, filepath string, isCompressed bool) error {
 		tr := tar.NewReader(gr)
 
 		// advance the reader pass the header, which will be the single binary file
-		tr.Next()
+		_, _ = tr.Next()
 
 		r = tr
 	}
@@ -198,7 +198,7 @@ func download(url, filepath string, isCompressed bool) error {
 
 // isCompressedFile is a really simple file extension check to see if this is a macos tar and gzipped
 func isCompressedFile(urlstring string) bool {
-	if strings.HasSuffix(urlstring, ".tgz") {
+	if path.Ext(urlstring) == ".tgz" {
 		return true
 	}
 
@@ -206,7 +206,7 @@ func isCompressedFile(urlstring string) bool {
 	if err != nil {
 		return false
 	}
-	return strings.HasSuffix(u.Path, ".tgz")
+	return path.Ext(u.Path) == ".tgz"
 }
 
 // writeBatchFile writes a batch file out to disk
@@ -249,7 +249,6 @@ func runWindowsBatch(batchFile string) error {
 		if exitError, ok := err.(*exec.ExitError); ok {
 			return fmt.Errorf("Error during update : %s;", string(exitError.Stderr))
 		}
-
 	}
 	return err
 }
