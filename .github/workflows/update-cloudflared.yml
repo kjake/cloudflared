@@ -24,19 +24,16 @@ jobs:
           # Use jq to parse the JSON (jq is available on ubuntu-latest).
           tag=$(echo "$release_info" | jq -r .tag_name)
           title=$(echo "$release_info" | jq -r .name)
-          body=$(echo "$release_info" | jq -r .body)
           echo "Latest tag: $tag"
-          echo "::set-output name=tag::$tag"
-          echo "::set-output name=title::$title"
-          echo "::set-output name=body::$body"
+          echo "tag=$tag" >> $GITHUB_OUTPUT
+          echo "title=$title" >> $GITHUB_OUTPUT
 
       # Step 2: Check whether our repo already has this version.
-      # In this example we assume a file named "VERSION" tracks the current version.
       - name: Check current version
         id: check_version
         run: |
-          if [ -f VERSION ]; then
-            current_version=$(cat VERSION)
+          if [ -f RELEASE_NOTES ]; then
+            current_version=$(head -1 RELEASE_NOTES)
           else
             current_version=""
           fi
@@ -48,15 +45,13 @@ jobs:
           fi
           echo "New version detected. Proceeding with update."
 
-      # Step 3: Create a branch and update the VERSION file.
+      # Step 3: Create a branch for new version
       - name: Create update branch and commit changes
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           branch="update-cloudflared-${{ steps.get_release.outputs.tag }}"
           git checkout -b $branch
-          echo "${{ steps.get_release.outputs.tag }}" > VERSION
-          git add VERSION
           git commit -m "Update cloudflared to version ${{ steps.get_release.outputs.tag }}"
           git push origin $branch
 
@@ -69,12 +64,10 @@ jobs:
           title: "Update cloudflared to ${{ steps.get_release.outputs.tag }}"
           body: |
             This PR updates cloudflared to version ${{ steps.get_release.outputs.tag }}.
-
-            **Upstream Release Title:** ${{ steps.get_release.outputs.title }}
-
-            **Release Notes:**
-            ${{ steps.get_release.outputs.body }}
-          base: master
+          labels: |
+            automated pr
+          assignees: ${{ github.repository_owner }}
+          reviewers: ${{ github.repository_owner }}
           branch: update-cloudflared-${{ steps.get_release.outputs.tag }}
           commit-message: "Update cloudflared to version ${{ steps.get_release.outputs.tag }}"
 
@@ -115,4 +108,3 @@ jobs:
         with:
           tag_name: ${{ steps.get_release.outputs.tag }}
           release_name: ${{ steps.get_release.outputs.title }}
-          body: ${{ steps.get_release.outputs.body }}
