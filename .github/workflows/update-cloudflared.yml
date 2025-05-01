@@ -46,8 +46,7 @@ jobs:
           git remote add upstream https://github.com/cloudflare/cloudflared.git || true
           git fetch upstream tag ${{ steps.get_release.outputs.tag }} --depth=1
           git checkout --detach FETCH_HEAD
-          git checkout -B update-cloudflared-${{ steps.get_release.outputs.tag }}
-          git checkout upstream/${{ steps.get_release.outputs.tag }} -- . ':(exclude).github/workflows'
+          git checkout -B update-cloudflared-${{ steps.get_release.outputs.tag }} -- . ':(exclude).github/workflows'
           git commit -a -m "Update cloudflared to ${{ steps.get_release.outputs.tag }}"
 
       - name: Push branch to origin
