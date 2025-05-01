@@ -45,9 +45,9 @@ jobs:
         run: |
           git remote add upstream https://github.com/cloudflare/cloudflared.git || true
           git fetch upstream tag ${{ steps.get_release.outputs.tag }} --depth=1
-          git checkout --detach FETCH_HEAD
-          git checkout -B update-cloudflared-${{ steps.get_release.outputs.tag }} -- . ':(exclude).github/workflows'
-          git commit -a -m "Update cloudflared to ${{ steps.get_release.outputs.tag }}"
+          git sparse-checkout init --cone
+          git sparse-checkout set "/*" "!/.github/workflows/"
+          git checkout -b update-cloudflared-${{ steps.get_release.outputs.tag }} FETCH_HEAD
 
       - name: Push branch to origin
         if: steps.check_version.outputs.up_to_date == 'false'
