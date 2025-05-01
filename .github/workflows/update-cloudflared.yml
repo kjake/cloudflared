@@ -2,18 +2,16 @@ name: Stage cloudflared Release
 
 on:
   schedule:
-    - cron: "0 */1 * * *"
+    - cron: "0 */12 * * *"
   workflow_dispatch:
 
 jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      # Step 1: Check out the current repository
       - name: Checkout repository
         uses: actions/checkout@v3
 
-      # Step 2: Fetch the latest release info from cloudflare/cloudflared.
       - name: Get latest upstream release info
         id: get_release
         run: |
@@ -25,12 +23,11 @@ jobs:
           echo "tag=$tag" >> $GITHUB_OUTPUT
           echo "title=$title" >> $GITHUB_OUTPUT
 
-      # Step 3: Check if the current version already matches the upstream release.
       - name: Check current version
         id: check_version
         run: |
           if [ -f RELEASE_NOTES ]; then
-            current_version=$(head -1 RELEASE_NOTES)
+            current_version=$(head -n1 RELEASE_NOTES)
           else
             current_version=""
           fi
@@ -43,18 +40,131 @@ jobs:
             echo "New version detected. Proceeding with update."
           fi
 
-      # Step 4: Add the upstream remote and fetch the tag, then create a new branch from it.
       - name: Add upstream remote and fetch tag
         if: steps.check_version.outputs.up_to_date == 'false'
         run: |
           git remote add upstream https://github.com/cloudflare/cloudflared.git || true
           git fetch upstream tag ${{ steps.get_release.outputs.tag }} --depth=1
-          # Detach HEAD to avoid inheriting your fork's master history.
           git checkout --detach FETCH_HEAD
           git checkout -B update-cloudflared-${{ steps.get_release.outputs.tag }}
+          git checkout upstream/${{ steps.get_release.outputs.tag }} -- . ':(exclude).github/workflows'
+          git commit -a -m "Update cloudflared to ${{ steps.get_release.outputs.tag }}"
 
-      # Step 5: Push the new branch to the current repository.
       - name: Push branch to origin
         if: steps.check_version.outputs.up_to_date == 'false'
         run: |
           git push origin update-cloudflared-${{ steps.get_release.outputs.tag }} --force
+
+      - name: Open pull request to merge update into master
+        env:
+          TAG: ${{ steps.get_release.outputs.tag }}
+          NEW_BRANCH: update-cloudflared-${{ steps.get_release.outputs.tag }}
+        if: steps.check_version.outputs.up_to_date == 'false'
+        id: create_pr
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const newBranch = process.env.NEW_BRANCH;
+            const tag = process.env.TAG;
+            const prTitle = `Update cloudflared to ${tag}`;
+            const prBody = `This PR merges changes from ${newBranch} into master.`;
+            const { data: pullRequest } = await github.rest.pulls.create({
+              owner,
+              repo,
+              head: newBranch,
+              base: 'master',
+              title: prTitle,
+              body: prBody
+            });
+            console.log(`Created PR: ${pullRequest.html_url}`);
+            await github.rest.issues.addAssignees({
+              owner,
+              repo,
+              issue_number: pullRequest.number,
+              assignees: [owner]
+            });
+            console.log(`Assigned ${owner} as PR assignee.`);
+            return { pr_number: pullRequest.number };
+
+      - name: Set PR_NUMBER environment variable
+        if: steps.check_version.outputs.up_to_date == 'false'
+        run: echo "PR_NUMBER=${{ steps.create_pr.outputs.pr_number }}" >> $GITHUB_ENV
+
+      - name: Auto merge pull request if mergeable
+        env:
+          TAG: ${{ steps.get_release.outputs.tag }}
+        if: steps.check_version.outputs.up_to_date == 'false'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr_number = parseInt(process.env.PR_NUMBER);
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            let pr;
+            let mergeable;
+            let attempts = 0;
+            // Poll for up to 10 attempts (approx. 100 seconds total)
+            while (attempts < 10) {
+              pr = await github.rest.pulls.get({
+                owner,
+                repo,
+                pull_number: pr_number
+              });
+              mergeable = pr.data.mergeable;
+              if (mergeable !== null) {
+                console.log(`Mergeable status determined: ${mergeable}`);
+                break;
+              }
+              attempts++;
+              console.log(`Mergeable is null. Waiting 10 seconds (attempt ${attempts})...`);
+              await new Promise(r => setTimeout(r, 10000));
+            }
+            if (mergeable === true) {
+              console.log("PR is mergeable. Merging PR...");
+              const mergeResult = await github.rest.pulls.merge({
+                owner,
+                repo,
+                pull_number: pr_number,
+                merge_method: 'merge'
+              });
+              console.log(`Merge result: ${mergeResult.data.message}`);
+            } else if (mergeable === false) {
+              console.log("PR is not mergeable. Not merging automatically.");
+            } else {
+              console.log("Mergeable status could not be determined in time. Exiting without merge.");
+            }
+
+      - name: Create new Release if PR merged
+        env:
+          TAG: ${{ steps.get_release.outputs.tag }}
+          TITLE: ${{ steps.get_release.outputs.title }}
+        if: steps.check_version.outputs.up_to_date == 'false'
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const pr_number = parseInt(process.env.PR_NUMBER);
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            // Re-fetch the pull request to verify merged status.
+            const { data: pullRequest } = await github.rest.pulls.get({
+              owner,
+              repo,
+              pull_number: pr_number
+            });
+            if (pullRequest.merged) {
+              console.log("PR has been merged. Creating a new release.");
+              const tag = process.env.TAG;
+              const title = process.env.TITLE;
+              const { data: release } = await github.rest.repos.createRelease({
+                owner,
+                repo,
+                tag_name: tag,
+                name: title,
+                body: `Release ${tag}: ${title}`
+              });
+              console.log(`Created release: ${release.html_url}`);
+            } else {
+              console.log("PR is not merged. Skipping release creation.");
+            }
