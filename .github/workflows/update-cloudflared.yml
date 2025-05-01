@@ -45,7 +45,7 @@ jobs:
         run: |
           git remote add upstream https://github.com/cloudflare/cloudflared.git || true
           git fetch upstream tag ${{ steps.get_release.outputs.tag }} --depth=1
-          git sparse-checkout init --cone
+          git sparse-checkout init --no-cone
           git sparse-checkout set "*" "!.github/workflows/"
           git read-tree -mu HEAD
           git checkout -b update-cloudflared-${{ steps.get_release.outputs.tag }} FETCH_HEAD
