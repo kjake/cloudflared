@@ -49,12 +49,13 @@ jobs:
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
           # Start from master
+          git fetch origin master
           git checkout -b update-cloudflared-${{ steps.get_release.outputs.tag }} origin/master
-          # Add upstream remote and fetch tag
+          # Add upstream remote and fetch the release tag
           git remote add upstream https://github.com/cloudflare/cloudflared.git || true
           git fetch upstream tag ${{ steps.get_release.outputs.tag }} --depth=1
-          # Merge upstream tag into branch
-          git merge --no-ff --no-edit upstream/${{ steps.get_release.outputs.tag }}
+          # Merge the fetched tag (not a branch) into the current branch
+          git merge --no-ff --no-edit ${{ steps.get_release.outputs.tag }}
           # Remove any workflows
           git rm -rf .github/workflows || true
           # Commit merged changes
