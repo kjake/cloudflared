@@ -18,6 +18,11 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Disable .gitattributes attributes
+        run: |
+          # Ignore custom merge rules (e.g., workflows ours) during this workflow
+          git config core.attributesFile /dev/null
+
       - name: Get latest upstream release info
         id: get_release
         run: |
