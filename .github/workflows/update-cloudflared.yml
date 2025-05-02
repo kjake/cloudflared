@@ -20,7 +20,6 @@ jobs:
 
       - name: Disable .gitattributes attributes
         run: |
-          # Ignore custom merge rules (e.g., workflows ours) during this workflow
           git config core.attributesFile /dev/null
 
       - name: Get latest upstream release info
@@ -30,122 +29,81 @@ jobs:
           release_info=$(curl -s https://api.github.com/repos/cloudflare/cloudflared/releases/latest)
           tag=$(echo "$release_info" | jq -r .tag_name)
           title=$(echo "$release_info" | jq -r .name)
-          echo "Latest tag: $tag"
           echo "tag=$tag" >> $GITHUB_OUTPUT
           echo "title=$title" >> $GITHUB_OUTPUT
 
       - name: Check current version
         id: check_version
         run: |
-          if [ -f RELEASE_NOTES ]; then
-            current_version=$(head -n1 RELEASE_NOTES)
-          else
-            current_version=''
-          fi
-          echo "Current version: $current_version"
-          echo "New version: ${{ steps.get_release.outputs.tag }}"
+          current_version=$( [ -f RELEASE_NOTES ] && head -n1 RELEASE_NOTES || echo '' )
+          echo "current_version=$current_version" >> $GITHUB_OUTPUT
           if [ "$current_version" = "${{ steps.get_release.outputs.tag }}" ]; then
             echo 'up_to_date=true' >> $GITHUB_OUTPUT
           else
             echo 'up_to_date=false' >> $GITHUB_OUTPUT
-            echo 'New version detected. Proceeding with update.'
           fi
 
-      - name: Create update branch from master
+      - name: Prepare update branch and merge tag
         if: steps.check_version.outputs.up_to_date == 'false'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
+          # Start from master
           git checkout -b update-cloudflared-${{ steps.get_release.outputs.tag }} origin/master
-
-      - name: Checkout upstream release
-        if: steps.check_version.outputs.up_to_date == 'false'
-        uses: actions/checkout@v4
-        with:
-          repository: cloudflare/cloudflared
-          ref: ${{ steps.get_release.outputs.tag }}
-          path: upstream
-
-      - name: Sync upstream into branch (excluding workflows)
-        if: steps.check_version.outputs.up_to_date == 'false'
-        run: |
-          set -o pipefail
-          rsync -av --delete upstream/ . \
-            --exclude '.git/' \
-            --exclude '.github/workflows/'
-          rc=$?
-          # Ignore vanished-file warnings (code 24)
-          if [ $rc -ne 0 ] && [ $rc -ne 24 ]; then
-            exit $rc
-          fi
-
-      - name: Commit update changes
-        if: steps.check_version.outputs.up_to_date == 'false'
-        run: |
-          git add -A
-          git commit -m "chore: update cloudflared to ${{ steps.get_release.outputs.tag }}" || echo 'No changes to commit'
+          # Add upstream remote and fetch tag
+          git remote add upstream https://github.com/cloudflare/cloudflared.git || true
+          git fetch upstream tag ${{ steps.get_release.outputs.tag }} --depth=1
+          # Merge upstream tag into branch
+          git merge --no-ff --no-edit upstream/${{ steps.get_release.outputs.tag }}
+          # Remove any workflows
+          git rm -rf .github/workflows || true
+          # Commit merged changes
+          git commit -m "chore: update cloudflared to ${{ steps.get_release.outputs.tag }}"
 
       - name: Push branch to origin
         if: steps.check_version.outputs.up_to_date == 'false'
         run: |
-          git push origin update-cloudflared-${{ steps.get_release.outputs.tag }} --force
+          git push --force origin update-cloudflared-${{ steps.get_release.outputs.tag }}
 
-      - name: Open pull request to merge update into master
+      - name: Open pull request
         if: steps.check_version.outputs.up_to_date == 'false'
         id: create_pr
         uses: actions/github-script@v6
         with:
           script: |
-            const owner = context.repo.owner
-            const repo = context.repo.repo
-            const newBranch = `update-cloudflared-${process.env.TAG}`
-            const tag = process.env.TAG
-            const prTitle = `chore: update cloudflared to ${tag}`
-            const prBody = `This PR merges changes from ${newBranch} into master.`
-            const { data: pullRequest } = await github.rest.pulls.create({
-              owner,
-              repo,
-              head: newBranch,
-              base: 'master',
-              title: prTitle,
-              body: prBody
-            })
-            console.log(`Created PR: ${pullRequest.html_url}`)
-            return { pr_number: pullRequest.number }
+            const { owner, repo } = context.repo;
+            const tag = process.env.TAG;
+            const head = `update-cloudflared-${tag}`;
+            const title = `chore: update cloudflared to ${tag}`;
+            const { data: pr } = await github.rest.pulls.create({ owner, repo, head, base: 'master', title, body: title });
+            return { pr_number: pr.number };
 
-      - name: Auto merge pull request if mergeable
+      - name: Auto merge PR
         if: steps.check_version.outputs.up_to_date == 'false'
         uses: actions/github-script@v6
         with:
           script: |
-            const pr_number = parseInt(process.env.PR_NUMBER)
-            const owner = context.repo.owner
-            const repo = context.repo.repo
-            let pr
-            let mergeable
-            let attempts = 0
-            while (attempts < 10) {
-              pr = await github.rest.pulls.get({ owner, repo, pull_number: pr_number })
-              mergeable = pr.data.mergeable
-              if (mergeable !== null) break
-              attempts++
-              await new Promise(r => setTimeout(r, 10000))
-            }
-            if (mergeable) {
-              await github.rest.pulls.merge({ owner, repo, pull_number: pr_number, merge_method: 'merge' })
+            const num = parseInt(process.env.PR_NUMBER);
+            const { owner, repo } = context.repo;
+            for (let i = 0; i < 10; i++) {
+              const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: num });
+              if (pr.mergeable !== null) {
+                if (pr.mergeable) await github.rest.pulls.merge({ owner, repo, pull_number: num });
+                break;
+              }
+              await new Promise(r => setTimeout(r, 10000));
             }
 
-      - name: Create new release if merged
+      - name: Create release
         if: steps.check_version.outputs.up_to_date == 'false'
         uses: actions/github-script@v6
         with:
           script: |
-            const pr_number = parseInt(process.env.PR_NUMBER)
-            const owner = context.repo.owner
-            const repo = context.repo.repo
-            const { data: pullRequest } = await github.rest.pulls.get({ owner, repo, pull_number: pr_number })
-            if (pullRequest.merged) {
-              const tag = process.env.TAG
-              const title = process.env.TITLE
-              await github.rest.repos.createRelease({ owner, repo, tag_name: tag, name: title, body: `Release ${tag}: ${title}` })
+            const num = parseInt(process.env.PR_NUMBER);
+            const { owner, repo } = context.repo;
+            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: num });
+            if (pr.merged) {
+              const tag = process.env.TAG;
+              const title = process.env.TITLE;
+              await github.rest.repos.createRelease({ owner, repo, tag_name: tag, name: title, body: `Release ${tag}: ${title}` });
             }
