@@ -91,8 +91,6 @@ else ifeq ($(LOCAL_OS),windows)
     TARGET_OS ?= windows
 else ifeq ($(LOCAL_OS),freebsd)
     TARGET_OS ?= freebsd
-else ifeq ($(LOCAL_OS),netbsd)
-    TARGET_OS ?= netbsd
 else ifeq ($(LOCAL_OS),openbsd)
     TARGET_OS ?= openbsd
 else
@@ -238,6 +236,10 @@ github-release-dryrun:
 github-release:
 	python3 github_release.py --path $(PWD)/built_artifacts --release-version $(VERSION)
 	python3 github_message.py --release-version $(VERSION)
+
+.PHONY: macos-release
+macos-release:
+	python3 github_release.py --path $(PWD)/artifacts/ --release-version $(VERSION)
 
 .PHONY: r2-linux-release
 r2-linux-release:
