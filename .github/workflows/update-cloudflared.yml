@@ -43,23 +43,23 @@ jobs:
             echo 'up_to_date=false' >> $GITHUB_OUTPUT
           fi
 
-      - name: Prepare update branch and merge tag
+      - name: Prepare update branch and import upstream tag
         if: steps.check_version.outputs.up_to_date == 'false'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          # Start from master
+          # Create branch from master
           git fetch origin master
           git checkout -b update-cloudflared-${{ steps.get_release.outputs.tag }} origin/master
-          # Add upstream remote and fetch the release tag
+          # Fetch only the tag commit
           git remote add upstream https://github.com/cloudflare/cloudflared.git || true
           git fetch upstream tag ${{ steps.get_release.outputs.tag }} --depth=1
-          # Merge the fetched tag (not a branch) into the current branch
-          git merge --no-ff --no-edit ${{ steps.get_release.outputs.tag }}
-          # Remove any workflows
+          # Overwrite working tree with upstream tag snapshot
+          git checkout FETCH_HEAD -- .
+          # Remove workflows directory
           git rm -rf .github/workflows || true
-          # Commit merged changes
-          git commit -m "chore: update cloudflared to ${{ steps.get_release.outputs.tag }}"
+          # Commit all changes
+          git commit -am "chore: update cloudflared to ${{ steps.get_release.outputs.tag }}"
 
       - name: Push branch to origin
         if: steps.check_version.outputs.up_to_date == 'false'
