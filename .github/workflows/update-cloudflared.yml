@@ -57,11 +57,13 @@ jobs:
           git checkout -b update-cloudflared-${{ env.TAG }} origin/master
           git remote add upstream https://github.com/cloudflare/cloudflared.git || true
           git fetch upstream tag ${{ env.TAG }} --depth=1
-          # Merge upstream tag normally
-          git merge --no-ff FETCH_HEAD --allow-unrelated-histories -m "chore: merge upstream ${TAG}"
+          # Merge upstream tag normally, allow conflicts for manual review
+          git merge --no-ff FETCH_HEAD --allow-unrelated-histories -m "chore: merge upstream ${TAG}" || echo "Merge completed with conflicts - manual resolution needed"
+          # Stage conflict markers into index
+          git add -A
+          git commit -m "chore: merge upstream ${TAG} (conflicts for manual review)"
           # Restore custom workflows from master
           git checkout origin/master -- .github/workflows
-          # Commit restoration
           git add .github/workflows
           git commit -m "chore: restore custom workflows"
 
