@@ -57,11 +57,13 @@ jobs:
           git checkout -b update-cloudflared-${{ env.TAG }} origin/master
           git remote add upstream https://github.com/cloudflare/cloudflared.git || true
           git fetch upstream tag ${{ env.TAG }} --depth=1
-          # Merge upstream tag into branch, preserving local customizations on conflicts
-          git merge --no-ff FETCH_HEAD -s recursive -X ours --allow-unrelated-histories --no-edit
-          # Remove any upstream workflows
-          git rm -rf .github/workflows || true
-          git commit -m "chore: update cloudflared to ${{ env.TAG }}"
+          # Merge upstream tag normally
+          git merge --no-ff FETCH_HEAD --allow-unrelated-histories -m "chore: merge upstream ${TAG}"
+          # Restore custom workflows from master
+          git checkout origin/master -- .github/workflows
+          # Commit restoration
+          git add .github/workflows
+          git commit -m "chore: restore custom workflows"
 
       - name: Push branch to origin
         if: steps.check_version.outputs.up_to_date == 'false'
@@ -77,6 +79,6 @@ jobs:
             const { owner, repo } = context.repo;
             const head = `update-cloudflared-${process.env.TAG}`;
             const title = `chore: update cloudflared to ${process.env.TAG}`;
-            const body = `This PR merges upstream ${process.env.TAG} into master, preserving custom changes.`;
+            const body = `This PR merges upstream ${process.env.TAG} into master, preserving fork CI.`;
             const { data: pr } = await github.rest.pulls.create({ owner, repo, head, base: 'master', title, body });
             return { pr_number: pr.number };
