@@ -58,7 +58,7 @@ jobs:
           git remote add upstream https://github.com/cloudflare/cloudflared.git || true
           git fetch upstream tag ${{ env.TAG }} --depth=1
           # Merge upstream tag into branch, preserving local customizations on conflicts
-          git merge upstream/${{ env.TAG }} -s recursive -X ours --allow-unrelated-histories --no-edit
+          git merge --no-ff FETCH_HEAD -s recursive -X ours --allow-unrelated-histories --no-edit
           # Remove any upstream workflows
           git rm -rf .github/workflows || true
           git commit -m "chore: update cloudflared to ${{ env.TAG }}"
