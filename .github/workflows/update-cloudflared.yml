@@ -1,4 +1,3 @@
-```yaml
 name: Stage cloudflared Release
 
 permissions:
@@ -165,4 +164,3 @@ jobs:
             } else {
               console.log('PR is not merged. Skipping release creation.')
             }
-```
