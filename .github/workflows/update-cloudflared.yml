@@ -69,9 +69,15 @@ jobs:
       - name: Sync upstream into branch (excluding workflows)
         if: steps.check_version.outputs.up_to_date == 'false'
         run: |
+          set -o pipefail
           rsync -av --delete upstream/ . \
             --exclude '.git/' \
             --exclude '.github/workflows/'
+          rc=$?
+          # Ignore vanished-file warnings (code 24)
+          if [ $rc -ne 0 ] && [ $rc -ne 24 ]; then
+            exit $rc
+          fi
 
       - name: Commit update changes
         if: steps.check_version.outputs.up_to_date == 'false'
