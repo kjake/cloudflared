@@ -20,6 +20,7 @@ jobs:
 
       - name: Disable .gitattributes attributes
         run: |
+          # Ignore custom merge rules
           git config core.attributesFile /dev/null
 
       - name: Get latest upstream release info
@@ -57,15 +58,15 @@ jobs:
           git checkout -b update-cloudflared-${{ env.TAG }} origin/master
           git remote add upstream https://github.com/cloudflare/cloudflared.git || true
           git fetch upstream tag ${{ env.TAG }} --depth=1
-          # Merge upstream tag normally, allow conflicts for manual review
+          # Merge upstream tag, allow conflicts for manual review
           git merge --no-ff FETCH_HEAD --allow-unrelated-histories -m "chore: merge upstream ${TAG}" || echo "Merge completed with conflicts - manual resolution needed"
-          # Stage conflict markers into index
+          # Stage and commit conflict markers if any
           git add -A
-          git commit -m "chore: merge upstream ${TAG} (conflicts for manual review)"
+          git commit -m "chore: merge upstream ${TAG} (conflicts for manual review)" || echo "No conflicts to commit"
           # Restore custom workflows from master
-          git checkout origin/master -- .github/workflows
+          git checkout origin/master -- .github/workflows || true
           git add .github/workflows
-          git commit -m "chore: restore custom workflows"
+          git commit -m "chore: restore custom workflows" || echo "No workflows changes to commit"
 
       - name: Push branch to origin
         if: steps.check_version.outputs.up_to_date == 'false'
@@ -81,6 +82,6 @@ jobs:
             const { owner, repo } = context.repo;
             const head = `update-cloudflared-${process.env.TAG}`;
             const title = `chore: update cloudflared to ${process.env.TAG}`;
-            const body = `This PR merges upstream ${process.env.TAG} into master, preserving fork CI.`;
+            const body = `This PR merges upstream ${process.env.TAG} into master, preserving fork CI and surfacing any conflicts for review.`;
             const { data: pr } = await github.rest.pulls.create({ owner, repo, head, base: 'master', title, body });
             return { pr_number: pr.number };
