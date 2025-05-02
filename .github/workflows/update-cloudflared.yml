@@ -32,6 +32,12 @@ jobs:
           echo "tag=$tag" >> $GITHUB_OUTPUT
           echo "title=$title" >> $GITHUB_OUTPUT
 
+      - name: Export TAG and TITLE as env vars
+        if: steps.check_version.outputs.up_to_date == 'false'
+        run: |
+          echo "TAG=${{ steps.get_release.outputs.tag }}" >> $GITHUB_ENV
+          echo "TITLE=${{ steps.get_release.outputs.title }}" >> $GITHUB_ENV
+
       - name: Check current version
         id: check_version
         run: |
@@ -48,23 +54,18 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          # Create branch from master
           git fetch origin master
-          git checkout -b update-cloudflared-${{ steps.get_release.outputs.tag }} origin/master
-          # Fetch only the tag commit
+          git checkout -b update-cloudflared-${{ env.TAG }} origin/master
           git remote add upstream https://github.com/cloudflare/cloudflared.git || true
-          git fetch upstream tag ${{ steps.get_release.outputs.tag }} --depth=1
-          # Overwrite working tree with upstream tag snapshot
+          git fetch upstream tag ${{ env.TAG }} --depth=1
           git checkout FETCH_HEAD -- .
-          # Remove workflows directory
           git rm -rf .github/workflows || true
-          # Commit all changes
-          git commit -am "chore: update cloudflared to ${{ steps.get_release.outputs.tag }}"
+          git commit -am "chore: update cloudflared to ${{ env.TAG }}"
 
       - name: Push branch to origin
         if: steps.check_version.outputs.up_to_date == 'false'
         run: |
-          git push --force origin update-cloudflared-${{ steps.get_release.outputs.tag }}
+          git push --force origin update-cloudflared-${{ env.TAG }}
 
       - name: Open pull request
         if: steps.check_version.outputs.up_to_date == 'false'
@@ -73,38 +74,7 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo;
-            const tag = process.env.TAG;
-            const head = `update-cloudflared-${tag}`;
-            const title = `chore: update cloudflared to ${tag}`;
+            const head = `update-cloudflared-${process.env.TAG}`;
+            const title = `chore: update cloudflared to ${process.env.TAG}`;
             const { data: pr } = await github.rest.pulls.create({ owner, repo, head, base: 'master', title, body: title });
             return { pr_number: pr.number };
-
-      - name: Auto merge PR
-        if: steps.check_version.outputs.up_to_date == 'false'
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const num = parseInt(process.env.PR_NUMBER);
-            const { owner, repo } = context.repo;
-            for (let i = 0; i < 10; i++) {
-              const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: num });
-              if (pr.mergeable !== null) {
-                if (pr.mergeable) await github.rest.pulls.merge({ owner, repo, pull_number: num });
-                break;
-              }
-              await new Promise(r => setTimeout(r, 10000));
-            }
-
-      - name: Create release
-        if: steps.check_version.outputs.up_to_date == 'false'
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const num = parseInt(process.env.PR_NUMBER);
-            const { owner, repo } = context.repo;
-            const { data: pr } = await github.rest.pulls.get({ owner, repo, pull_number: num });
-            if (pr.merged) {
-              const tag = process.env.TAG;
-              const title = process.env.TITLE;
-              await github.rest.repos.createRelease({ owner, repo, tag_name: tag, name: title, body: `Release ${tag}: ${title}` });
-            }
