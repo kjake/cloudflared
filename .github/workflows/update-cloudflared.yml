@@ -33,7 +33,6 @@ jobs:
           echo "title=$title" >> $GITHUB_OUTPUT
 
       - name: Export TAG and TITLE as env vars
-        if: steps.check_version.outputs.up_to_date == 'false'
         run: |
           echo "TAG=${{ steps.get_release.outputs.tag }}" >> $GITHUB_ENV
           echo "TITLE=${{ steps.get_release.outputs.title }}" >> $GITHUB_ENV
