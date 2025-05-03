@@ -17,7 +17,17 @@ cloudflared-openbsd7-amd64: ELF 64-bit LSB executable, x86-64, version 1 (OpenBS
 cloudflared-netbsd10-amd64: ELF 64-bit LSB executable, x86-64, version 1 (NetBSD), statically linked, for NetBSD 7.0, BuildID[sha1]=ee1a86cd4d2281c56b0c2e124f8337716aa22844, with debug_info, not stripped
 ```
 
----
+## Updating cloudflared
+
+Grab the updater and run it:
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/kjake/cloudflared/customizations/update-cloudflared.sh \
+  -o update-cloudflared.sh
+chmod +x update-cloudflared.sh
+./update-cloudflared.sh /usr/local/bin/cloudflared
+```
+
 
 ## Branching Model
 
