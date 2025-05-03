@@ -64,8 +64,6 @@ jobs:
           # 4) Re-apply your own workflows
           rm -rf .github/workflows
           git checkout origin/customizations -- \
-            .github/workflows/build_unix.yaml \
-            cmd/cloudflared/generic_service.go \
             diagnostic/network/collector_unix_test.go \
             diagnostic/network/collector_unix.go \
             diagnostic/system_collector_unix.go \
@@ -76,3 +74,17 @@ jobs:
           git add -A
           git commit -m "chore: apply customizations on ${TAG}"
           git push --force-with-lease origin "${branch}"
+
+      - name: Create GitHub Release
+        if: steps.check_version.outputs.up_to_date == 'false'
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ env.TAG }}
+          release_name: ${{ env.TITLE }}
+          body: |
+            Automated Cloudflared release **${{ env.TAG }}**  
+            Includes all customizations from `customizations` branch.
+          draft: false
+          prerelease: false
