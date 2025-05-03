@@ -2,8 +2,11 @@ name: Build Native
 
 on:
   release:
-    types: [published]
+    types: [created, published]
   workflow_dispatch:
+  workflow_run:
+    workflows: ["New cloudflared Release"]
+    types: [completed]
 
 jobs:
   build:
