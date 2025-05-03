@@ -50,20 +50,29 @@ jobs:
 
           branch="release-${TAG}"
 
-          # Start from the upstream tag
-          git remote add upstream https://github.com/cloudflare/cloudflared.git || true
-          git checkout -b "$branch" "FETCH_HEAD"
+          # 1) Add upstream and fetch the tag
+          git remote add upstream https://github.com/cloudflare/cloudflared.git
+          git fetch upstream --depth=1 tag "${TAG}"
 
-          # Merge our customizations on top
+          # 2) Create new branch off the upstream tag
+          git checkout -b "${branch}" "FETCH_HEAD"
+
+          # 3) Merge in your customizations
           git fetch origin customizations
-          git merge --no-commit --no-ff origin/customizations || true   # stop if conflicts
+          git merge --no-commit --no-ff origin/customizations || true
 
-          # Keep our own workflows regardless of what upstream added
+          # 4) Re-apply your own workflows
           rm -rf .github/workflows
-          git checkout origin/customizations -- .github/workflows/build_unix.yaml cmd/cloudflared/generic_service.go diagnostic/network/collector_unix_test.go diagnostic/network/collector_unix.go diagnostic/system_collector_unix.go ingress/icmp_posix.go ingress/icmp_posix_test.go
+          git checkout origin/customizations -- \
+            .github/workflows/build_unix.yaml \
+            cmd/cloudflared/generic_service.go \
+            diagnostic/network/collector_unix_test.go \
+            diagnostic/network/collector_unix.go \
+            diagnostic/system_collector_unix.go \
+            ingress/icmp_posix.go \
+            ingress/icmp_posix_test.go
 
-          # Finalise the merge (contains *all* your code + upstream)
+          # 5) Finalise and push
           git add -A
           git commit -m "chore: apply customizations on ${TAG}"
-
-          git push --force-with-lease origin "$branch"
+          git push --force-with-lease origin "${branch}"
