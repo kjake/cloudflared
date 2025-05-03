@@ -13,65 +13,59 @@ jobs:
   update:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repository
+      - name: Checkout customizations branch
         uses: actions/checkout@v4
         with:
+          ref: customizations
           fetch-depth: 0
 
-      - name: Disable .gitattributes attributes
-        run: |
-          # Ignore custom merge rules
-          git config core.attributesFile /dev/null
+      - name: Disable .gitattributes enforcement
+        run: git config core.attributesFile /dev/null
 
       - name: Get latest upstream release info
         id: get_release
         run: |
-          echo 'Fetching latest release info from cloudflare/cloudflared...'
-          release_info=$(curl -s https://api.github.com/repos/cloudflare/cloudflared/releases/latest)
-          tag=$(echo "$release_info" | jq -r .tag_name)
-          title=$(echo "$release_info" | jq -r .name)
+          echo 'Fetching latest release tag from cloudflare/cloudflared...'
+          release=$(curl -s https://api.github.com/repos/cloudflare/cloudflared/releases/latest)
+          tag=$(echo "$release" | jq -r .tag_name)
+          title=$(echo "$release" | jq -r .name)
           echo "tag=$tag" >> $GITHUB_OUTPUT
           echo "title=$title" >> $GITHUB_OUTPUT
 
-      - name: Export TAG and TITLE
+      - name: Export tag and title
         run: |
           echo "TAG=${{ steps.get_release.outputs.tag }}" >> $GITHUB_ENV
           echo "TITLE=${{ steps.get_release.outputs.title }}" >> $GITHUB_ENV
 
-      - name: Check current version
+      - name: Check if already up-to-date
         id: check_version
         run: |
-          current_version=$( [ -f RELEASE_NOTES ] && head -n1 RELEASE_NOTES || echo '' )
-          echo "current_version=$current_version" >> $GITHUB_OUTPUT
-          if [ "$current_version" = "${{ steps.get_release.outputs.tag }}" ]; then
+          last=$(git tag --sort=-creatordate | grep -E '^release-' | head -n1 | sed 's/^release-//')
+          echo "current=$last" >> $GITHUB_OUTPUT
+          if [ "$last" = "${{ env.TAG }}" ]; then
             echo 'up_to_date=true' >> $GITHUB_OUTPUT
           else
             echo 'up_to_date=false' >> $GITHUB_OUTPUT
           fi
 
-      - name: Prepare update branch
+      - name: Prepare release branch
         if: steps.check_version.outputs.up_to_date == 'false'
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          git fetch origin master
-          git checkout -b update-cloudflared-${{ env.TAG }} origin/master
+          # Create a release branch off customizations
+          branch="release-${TAG}"
+          git checkout -b "$branch"
+          # Merge upstream tag
           git remote add upstream https://github.com/cloudflare/cloudflared.git || true
-          git fetch upstream tag ${{ env.TAG }} --depth=1
-          # Merge upstream tag, allow conflicts for manual review
-          git merge --no-ff FETCH_HEAD --allow-unrelated-histories -m "chore: merge upstream ${TAG}" || echo "Merge completed with conflicts - manual resolution needed"
-          # Stage and commit conflict markers if any
-          git add -A
-          git commit -m "chore: merge upstream ${TAG} (conflicts for manual review)" || echo "No conflicts to commit"
-          # Restore custom workflows from master
-          git checkout origin/master -- .github/workflows || true
+          git fetch upstream tag "$TAG" --depth=1
+          git merge --no-ff FETCH_HEAD --allow-unrelated-histories -m "chore: merge upstream $TAG" || echo 'Merge conflicts recorded for review'
+          # Restore custom workflows
+          git checkout customizations -- .github/workflows || true
           git add .github/workflows
-          git commit -m "chore: restore custom workflows" || echo "No workflows changes to commit"
-
-      - name: Push branch to origin
-        if: steps.check_version.outputs.up_to_date == 'false'
-        run: |
-          git push --force origin update-cloudflared-${{ env.TAG }}
+          git commit -m "chore: restore custom workflows" || echo 'No workflows to restore'
+          # Push release branch
+          git push --force origin "$branch"
 
       - name: Open pull request
         if: steps.check_version.outputs.up_to_date == 'false'
@@ -80,8 +74,12 @@ jobs:
         with:
           script: |
             const { owner, repo } = context.repo;
-            const head = `update-cloudflared-${process.env.TAG}`;
-            const title = `chore: update cloudflared to ${process.env.TAG}`;
-            const body = `This PR merges upstream ${process.env.TAG} into master, preserving fork CI and surfacing any conflicts for review.`;
-            const { data: pr } = await github.rest.pulls.create({ owner, repo, head, base: 'master', title, body });
+            const branch = `release-${process.env.TAG}`;
+            const { data: pr } = await github.rest.pulls.create({
+              owner, repo,
+              head: branch,
+              base: 'customizations',
+              title: `chore: release cloudflared ${process.env.TAG}`,
+              body: `Merging upstream release ${process.env.TAG} into customizations. Manual review of conflicts required.`
+            });
             return { pr_number: pr.number };
