@@ -28,11 +28,8 @@ jobs:
           title=$(echo "$release" | jq -r .name)
           echo "tag=$tag" >> $GITHUB_OUTPUT
           echo "title=$title" >> $GITHUB_OUTPUT
-
-      - name: Export tag and title
-        run: |
-          echo "TAG=${{ steps.get_release.outputs.tag }}" >> $GITHUB_ENV
-          echo "TITLE=${{ steps.get_release.outputs.title }}" >> $GITHUB_ENV
+          echo "TAG=$tag" >> $GITHUB_ENV
+          echo "TITLE=$title" >> $GITHUB_ENV
 
       - name: Check if already up-to-date
         id: check_version
@@ -50,36 +47,24 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          branch="release-${TAG}"
-          git checkout -b "$branch"
-          git remote add upstream https://github.com/cloudflare/cloudflared.git || true
-          git fetch upstream tag "$TAG" --depth=1
-          # Merge upstream tag, record conflicts for review
-          git merge --no-ff FETCH_HEAD --allow-unrelated-histories -m "chore: merge upstream $TAG" || echo 'Merge conflicts recorded for review'
-          # Stage and commit conflict markers if any
-          git add -A
-          git commit -m "chore: merge upstream $TAG (conflicts for manual review)" || echo 'No conflict commit needed'
-          git merge --no-commit --no-ff FETCH_HEAD --allow-unrelated-histories
-          rm -rf .github/workflows              # drop upstream workflows
-          # Restore custom workflows
-          git checkout customizations -- .github/workflows || true
-          git add .github/workflows
-          git commit -m "chore: restore custom workflows" || echo 'No workflows to restore'
-          git push --force origin "$branch"
 
-      - name: Open pull request
-        if: steps.check_version.outputs.up_to_date == 'false'
-        id: create_pr
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const { owner, repo } = context.repo;
-            const branch = `release-${process.env.TAG}`;
-            const { data: pr } = await github.rest.pulls.create({
-              owner, repo,
-              head: branch,
-              base: 'customizations',
-              title: `chore: release cloudflared ${process.env.TAG}`,
-              body: `Merging upstream release ${process.env.TAG} into customizations. Manual review of conflicts required.`
-            });
-            return { pr_number: pr.number };
+          branch="release-${TAG}"
+
+          # Start from the upstream tag
+          git remote add upstream https://github.com/cloudflare/cloudflared.git || true
+          git fetch --depth=1 upstream "refs/tags/${TAG}"
+          git checkout -b "$branch" "FETCH_HEAD"
+
+          # Merge our customizations on top
+          git fetch origin customizations
+          git merge --no-commit --no-ff origin/customizations || true   # stop if conflicts
+
+          # Keep our own workflows regardless of what upstream added
+          rm -rf .github/workflows
+          git checkout origin/customizations -- .github/workflows
+
+          # Finalise the merge (contains *all* your code + upstream)
+          git add -A
+          git commit -m "chore: apply customizations on ${TAG}"
+
+          git push --force-with-lease origin "$branch"
