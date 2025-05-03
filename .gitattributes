@@ -2,3 +2,4 @@
 .github/workflows/** merge=ours
 .gitattributes merge=ours
 README.md merge=ours
+Makefile merge=ours

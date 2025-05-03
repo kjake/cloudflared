@@ -60,6 +60,7 @@ jobs:
         if: matrix.os == 'netbsd'
         uses: vmactions/netbsd-vm@v1
         with:
+          release: "10.1"
           envs: "GOEXPERIMENT CGO_ENABLED"
           usesh: true
           mem: 4096
@@ -83,6 +84,7 @@ jobs:
         if: matrix.os == 'openbsd'
         uses: vmactions/openbsd-vm@v1
         with:
+          release: "7.7"
           envs: "GOEXPERIMENT CGO_ENABLED"
           usesh: true
           mem: 4096
