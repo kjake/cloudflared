@@ -113,5 +113,5 @@ jobs:
           gh release upload "${{ steps.get_release.outputs.tag_name }}" \
             cloudflared \
             --clobber \
-            --name "${{ matrix.assetName }}"" \
+            --name "${{ matrix.assetName }}" \
             --content-type application/octet-stream
