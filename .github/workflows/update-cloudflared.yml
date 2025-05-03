@@ -1,4 +1,4 @@
-name: Stage cloudflared Release
+name: New cloudflared Release
 
 permissions:
   contents: write
