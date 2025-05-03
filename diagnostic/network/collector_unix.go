@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 //go:build darwin || linux || freebsd || openbsd || netbsd
+=======
+//go:build darwin || linux
+>>>>>>> 6fd2c99ac55bdb75cccdd8896fcd4ca1cff3b540
 
 package diagnostic
 

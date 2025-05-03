@@ -37,4 +37,8 @@ func installGenericService(c *cli.Context) error {
 
 func uninstallGenericService(c *cli.Context) error {
 	return fmt.Errorf("service uninstallation is not supported on this operating system")
+<<<<<<< HEAD
 }
+=======
+}
+>>>>>>> 6fd2c99ac55bdb75cccdd8896fcd4ca1cff3b540
