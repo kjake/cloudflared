@@ -1,6 +1,21 @@
-# cloudflared Fork
+# cloudflared for *BSD
 
-This repository maintains a fork of `cloudflare/cloudflared`, staged for automated upstream updates while preserving our custom CI workflows.
+This repository maintains a fork of `cloudflare/cloudflared` with minimal customizations in order to build for most *BSD systems.  
+The supported automated builds are attached to the Releases area.
+
+The current supported build targets are:
+* FreeBSD 14 (amd64)
+* OpenBSD 7 (amd64)
+* NetBSD 10 (amd64)
+
+Builds happen on virtual machines and are not cross-compiled in Linux:
+```yaml
+cloudflared-freebsd14-amd64: ELF 64-bit LSB executable, x86-64, version 1 (FreeBSD), statically linked, for FreeBSD 12.3, FreeBSD-style, Go BuildID=whtbnhgLy_4DNlvoQVLN/sdPbSLy5tutf2R4FBg0D/tkLU1W0BkczEJ-UfmxXi/-wnnwpjpQM5JSMNpsu8B, with debug_info, not stripped
+
+cloudflared-openbsd7-amd64: ELF 64-bit LSB executable, x86-64, version 1 (OpenBSD), dynamically linked, interpreter /usr/libexec/ld.so, for OpenBSD, Go BuildID=sKt-KKXK70xaz3xIjpcG/DI00O_ESV89p0mlN2FHW/CxKapph2Ks5I7Pe4q00b/xlodVQBnz_4GDBLMx3C-, with debug_info, not stripped
+
+cloudflared-netbsd10-amd64: ELF 64-bit LSB executable, x86-64, version 1 (NetBSD), statically linked, for NetBSD 7.0, BuildID[sha1]=ee1a86cd4d2281c56b0c2e124f8337716aa22844, with debug_info, not stripped
+```
 
 ---
 
@@ -21,59 +36,26 @@ This repository maintains a fork of `cloudflare/cloudflared`, staged for automat
 
 1. **Clone your fork**
 
-   ```bash
+   ```sh
    git clone https://github.com/<your-org>/cloudflared.git
    cd cloudflared
    ```
 
 2. **Verify `customizations` is default**
 
-   ```bash
+   ```sh
    git branch --show-current  # should output: customizations
    ```
 
 3. **Update README**
    Simply edit this file and push to `customizations`:
 
-   ```bash
+   ```sh
    git checkout customizations
    git add README.md
    git commit -m "docs: update README"
    git push origin customizations
    ```
-
-## Automated Upstream Sync
-
-We use a GitHub Actions workflow (`.github/workflows/update-cloudflared.yml`) that runs on a schedule or via manual dispatch. On each run:
-
-1. Fetch the latest upstream release tag from `cloudflare/cloudflared`.
-2. Create a new branch `release-<tag>` off of `customizations`.
-3. Merge upstream tag into `release-<tag>`, preserving upstream diffs.
-4. Apply our `customizations` overlay.
-5. Push `release-<tag>` to GitHub and open a PR for manual review.
-
-Conflicts (if any) are surfaced in the PR for one-time resolution.
-
-## Manual Release Workflow (optional)
-
-If you prefer to run sync locally:
-
-```bash
-# 1) Fetch new tag
-git fetch https://github.com/cloudflare/cloudflared.git tag vX.Y.Z --depth=1
-
-# 2) Create release branch
-git checkout -b release-vX.Y.Z customizations
-
-# 3) Merge upstream
-git merge FETCH_HEAD --allow-unrelated-histories -m "chore: merge upstream vX.Y.Z"
-
-# 4) Apply overlay
-git merge customizations -s recursive -X ours --no-ff -m "chore: apply custom overlay"
-
-# 5) Push and PR
-git push -u origin release-vX.Y.Z
-```
 
 ## Contributing
 

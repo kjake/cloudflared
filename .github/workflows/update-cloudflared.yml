@@ -83,8 +83,8 @@ jobs:
           tag_name: ${{ env.TAG }}
           name: ${{ env.TITLE }}
           body: |
-            Automated Cloudflared release **${{ env.TAG }}**  
-            Includes all customizations from `customizations` branch.
+            Automated cloudflared release of version **${{ env.TAG }}**  
+            Stock upstream cloudflared with BSD tweaks from `customizations` branch in this repo.
           draft: false
           prerelease: false
           target_commitish: release-${{ env.TAG }}
