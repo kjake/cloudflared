@@ -53,18 +53,19 @@ jobs:
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
-          # Create a release branch off customizations
           branch="release-${TAG}"
           git checkout -b "$branch"
-          # Merge upstream tag
           git remote add upstream https://github.com/cloudflare/cloudflared.git || true
           git fetch upstream tag "$TAG" --depth=1
+          # Merge upstream tag, record conflicts for review
           git merge --no-ff FETCH_HEAD --allow-unrelated-histories -m "chore: merge upstream $TAG" || echo 'Merge conflicts recorded for review'
+          # Stage and commit conflict markers if any
+          git add -A
+          git commit -m "chore: merge upstream $TAG (conflicts for manual review)" || echo 'No conflict commit needed'
           # Restore custom workflows
           git checkout customizations -- .github/workflows || true
           git add .github/workflows
           git commit -m "chore: restore custom workflows" || echo 'No workflows to restore'
-          # Push release branch
           git push --force origin "$branch"
 
       - name: Open pull request
