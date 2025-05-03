@@ -97,21 +97,20 @@ jobs:
             go install golang.org/x/tools/cmd/goimports@latest
             gmake cloudflared cleanup-go
 
-      - name: Upload build to GitHub Release
-        if: github.event_name == 'release'
-        uses: actions/upload-release-asset@v2
-        with:
-          upload_url: ${{ github.event.release.upload_url }}
-          asset_path: cloudflared
-          asset_name: ${{ matrix.assetName }}
-          asset_content_type: application/octet-stream
+      - name: Authenticate GH CLI
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
 
-      - name: Upload build to GitHub Release (manual)
-        if: github.event_name == 'workflow_dispatch'
+      - name: Upload build to GitHub Release
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
-          gh release upload "${{ github.event.inputs.tag }}" \
+          TAG=$(
+            if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
+              echo "${{ github.event.inputs.tag }}"
+            else
+              echo "${{ github.event.release.tag_name }}"
+            fi
+          )
+          gh release upload "$TAG" \
             cloudflared \
             --clobber \
-            --name ${{ matrix.assetName }} \
+            --name "${{ matrix.assetName }}"" \
             --content-type application/octet-stream
