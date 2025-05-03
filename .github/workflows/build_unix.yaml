@@ -110,8 +110,8 @@ jobs:
 
       - name: Upload build to GitHub Release
         run: |
+          mv cloudflared ${{ matrix.assetName }}
           gh release upload "${{ steps.get_release.outputs.tag_name }}" \
             cloudflared \
             --clobber \
-            --name "${{ matrix.assetName }}" \
             --content-type application/octet-stream
