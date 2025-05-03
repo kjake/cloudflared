@@ -4,10 +4,6 @@ on:
   release:
     types: [created, published]
   workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Release tag to build (e.g. 2025.4.2)'
-        required: true
   workflow_run:
     workflows: ["New cloudflared Release"]
     types: [completed]
@@ -28,11 +24,21 @@ jobs:
       GOEXPERIMENT: "noboringcrypto"
       CGO_ENABLED: 0
     steps:
+      - name: Get latest release tag
+        id: get_release
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const { data } = await github.rest.repos.getLatestRelease({
+              owner: context.repo.owner,
+              repo:  context.repo.repo
+            });
+            core.setOutput('tag_name', data.tag_name);
 
       - name: Checkout Release Tag
         uses: actions/checkout@v4
         with:
-          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.event.release.tag_name }}
+          ref: ${{ steps.get_release.outputs.tag_name }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -104,14 +110,7 @@ jobs:
 
       - name: Upload build to GitHub Release
         run: |
-          TAG=$(
-            if [[ "${GITHUB_EVENT_NAME}" == "workflow_dispatch" ]]; then
-              echo "${{ github.event.inputs.tag }}"
-            else
-              echo "${{ github.event.release.tag_name }}"
-            fi
-          )
-          gh release upload "$TAG" \
+          gh release upload "${{ steps.get_release.outputs.tag_name }}" \
             cloudflared \
             --clobber \
             --name "${{ matrix.assetName }}"" \
