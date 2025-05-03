@@ -68,7 +68,8 @@ jobs:
             diagnostic/network/collector_unix.go \
             diagnostic/system_collector_unix.go \
             ingress/icmp_posix.go \
-            ingress/icmp_posix_test.go
+            ingress/icmp_posix_test.go \
+            Makefile
 
           # 5) Finalise and push
           git add -A
