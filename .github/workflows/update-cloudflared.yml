@@ -61,7 +61,7 @@ jobs:
 
           # Keep our own workflows regardless of what upstream added
           rm -rf .github/workflows
-          git checkout origin/customizations -- .github/workflows
+          git checkout origin/customizations -- 
 
           # Finalise the merge (contains *all* your code + upstream)
           git add -A
