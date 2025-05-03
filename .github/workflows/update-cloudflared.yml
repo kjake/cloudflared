@@ -52,7 +52,6 @@ jobs:
 
           # Start from the upstream tag
           git remote add upstream https://github.com/cloudflare/cloudflared.git || true
-          git fetch upstream --tags --prune
           git checkout -b "$branch" "FETCH_HEAD"
 
           # Merge our customizations on top
