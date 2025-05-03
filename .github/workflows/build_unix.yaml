@@ -87,8 +87,8 @@ jobs:
           usesh: true
           mem: 4096
           prepare: |
-            pkg_add -xaz gmake sudo-- bash git go curl wget fakeroot libffi ruby-33
-            gem33 install fpm
+            pkg_add -xaz gmake sudo-- bash git go curl wget libffi ruby-34
+            gem34 install fpm
             git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
           run: |
             gmake install-go
