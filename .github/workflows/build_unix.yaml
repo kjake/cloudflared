@@ -112,6 +112,5 @@ jobs:
         run: |
           mv cloudflared ${{ matrix.assetName }}
           gh release upload "${{ steps.get_release.outputs.tag_name }}" \
-            cloudflared \
-            --clobber \
-            --content-type application/octet-stream
+            ${{ matrix.assetName }} \
+            --clobber
