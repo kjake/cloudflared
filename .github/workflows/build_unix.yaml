@@ -4,6 +4,10 @@ on:
   release:
     types: [created, published]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to build (e.g. 2025.4.2)'
+        required: true
   workflow_run:
     workflows: ["New cloudflared Release"]
     types: [completed]
@@ -24,22 +28,11 @@ jobs:
       GOEXPERIMENT: "noboringcrypto"
       CGO_ENABLED: 0
     steps:
-      - name: Get Release Details
-        id: release_details
-        uses: actions/github-script@v6
-        with:
-          script: |
-            const { data: release } = await github.rest.repos.getLatestRelease({
-              owner: context.repo.owner,
-              repo: context.repo.repo
-            });
-            core.info(`Building for release tag: ${release.tag_name}`);
-            return release;
 
       - name: Checkout Release Tag
         uses: actions/checkout@v4
         with:
-          ref: ${{ steps.release_details.outputs.result.tag_name }}
+          ref: ${{ github.event_name == 'workflow_dispatch' && github.event.inputs.tag || github.event.release.tag_name }}
           fetch-depth: 0
           fetch-tags: true
 
@@ -104,25 +97,21 @@ jobs:
             go install golang.org/x/tools/cmd/goimports@latest
             gmake cloudflared cleanup-go
 
-      # Upload asset (this step can use expressions since it's a script)
-      - name: Upload Release Asset
-        uses: actions/github-script@v6
+      - name: Upload build to GitHub Release
+        if: github.event_name == 'release'
+        uses: actions/upload-release-asset@v2
         with:
-          script: |
-            const fs = require('fs');
-            const assetPath = 'cloudflared';
-            const assetName = '${{ matrix.assetName }}';
-            const release = ${{ steps.release_details.outputs.result }};
-            const fileData = fs.readFileSync(assetPath);
-            const { data: asset } = await github.rest.repos.uploadReleaseAsset({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              release_id: release.id,
-              name: assetName,
-              data: fileData,
-              headers: {
-                'content-type': 'application/octet-stream'
-              }
-            });
-            core.info(`Uploaded asset: ${asset.name}`);
-            return asset;
+          upload_url: ${{ github.event.release.upload_url }}
+          asset_path: cloudflared
+          asset_name: ${{ matrix.assetName }}
+          asset_content_type: application/octet-stream
+
+      - name: Upload build to GitHub Release (manual)
+        if: github.event_name == 'workflow_dispatch'
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
+          gh release upload "${{ github.event.inputs.tag }}" \
+            cloudflared \
+            --clobber \
+            --name ${{ matrix.assetName }} \
+            --content-type application/octet-stream
