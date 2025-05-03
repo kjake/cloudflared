@@ -1,0 +1,4 @@
+# Always prefer our version; ignore upstream changes
+.github/workflows/** merge=ours
+.gitattributes merge=ours
+README.md merge=ours

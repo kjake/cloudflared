@@ -3,7 +3,6 @@ name: Stage cloudflared Release
 permissions:
   contents: write
   pull-requests: write
-  workflows: write
 
 on:
   schedule:
@@ -19,9 +18,6 @@ jobs:
         with:
           ref: customizations
           fetch-depth: 0
-
-      - name: Disable .gitattributes enforcement
-        run: git config core.attributesFile /dev/null
 
       - name: Get latest upstream release info
         id: get_release
