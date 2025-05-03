@@ -59,6 +59,8 @@ jobs:
           # Stage and commit conflict markers if any
           git add -A
           git commit -m "chore: merge upstream $TAG (conflicts for manual review)" || echo 'No conflict commit needed'
+          git merge --no-commit --no-ff FETCH_HEAD --allow-unrelated-histories
+          rm -rf .github/workflows              # drop upstream workflows
           # Restore custom workflows
           git checkout customizations -- .github/workflows || true
           git add .github/workflows
