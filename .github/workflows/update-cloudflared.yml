@@ -34,7 +34,7 @@ jobs:
       - name: Check if already up-to-date
         id: check_version
         run: |
-          last=$(git tag --sort=-creatordate | grep -E '^release-' | head -n1 | sed 's/^release-//')
+          last=$(git tag --sort=-creatordate | head -n1 )
           echo "current=$last" >> $GITHUB_OUTPUT
           if [ "$last" = "${{ env.TAG }}" ]; then
             echo 'up_to_date=true' >> $GITHUB_OUTPUT
