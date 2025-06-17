@@ -56,6 +56,8 @@ PACKAGE_DIR    := $(CURDIR)/packaging
 PREFIX         := /usr
 INSTALL_BINDIR := $(PREFIX)/bin/
 INSTALL_MANDIR := $(PREFIX)/share/man/man1/
+CF_GO_PATH     := /tmp/go
+PATH           := $(CF_GO_PATH)/bin:$(PATH)
 
 LOCAL_ARCH ?= $(shell uname -m)
 ifneq ($(GOARCH),)
@@ -89,6 +91,8 @@ else ifeq ($(LOCAL_OS),windows)
     TARGET_OS ?= windows
 else ifeq ($(LOCAL_OS),freebsd)
     TARGET_OS ?= freebsd
+else ifeq ($(LOCAL_OS),netbsd)
+    TARGET_OS ?= netbsd
 else ifeq ($(LOCAL_OS),openbsd)
     TARGET_OS ?= openbsd
 else
@@ -126,10 +130,6 @@ all: cloudflared test
 .PHONY: clean
 clean:
 	go clean
-
-.PHONY: vulncheck
-vulncheck:
-	@govulncheck ./...
 
 .PHONY: cloudflared
 cloudflared:
@@ -181,10 +181,19 @@ fuzz:
 	@go test -fuzz=FuzzNewIdentity -fuzztime=600s ./tracing
 	@go test -fuzz=FuzzNewAccessValidator -fuzztime=600s ./validation
 
+.PHONY: install-go
+install-go:
+	rm -rf ${CF_GO_PATH}
+	./.teamcity/install-cloudflare-go.sh
+
+.PHONY: cleanup-go
+cleanup-go:
+	rm -rf ${CF_GO_PATH}
+
 cloudflared.1: cloudflared_man_template
 	sed -e 's/\$${VERSION}/$(VERSION)/; s/\$${DATE}/$(DATE)/' cloudflared_man_template > cloudflared.1
 
-install: cloudflared cloudflared.1
+install: install-go cloudflared cloudflared.1 cleanup-go
 	mkdir -p $(DESTDIR)$(INSTALL_BINDIR) $(DESTDIR)$(INSTALL_MANDIR)
 	install -m755 cloudflared $(DESTDIR)$(INSTALL_BINDIR)/cloudflared
 	install -m644 cloudflared.1 $(DESTDIR)$(INSTALL_MANDIR)/cloudflared.1
@@ -229,10 +238,6 @@ github-release-dryrun:
 github-release:
 	python3 github_release.py --path $(PWD)/built_artifacts --release-version $(VERSION)
 	python3 github_message.py --release-version $(VERSION)
-
-.PHONY: macos-release
-macos-release:
-	python3 github_release.py --path $(PWD)/artifacts/ --release-version $(VERSION)
 
 .PHONY: r2-linux-release
 r2-linux-release:
