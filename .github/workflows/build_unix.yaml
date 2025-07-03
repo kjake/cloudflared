@@ -52,11 +52,10 @@ jobs:
             pkg install -y gmake sudo bash git go golangci-lint curl wget fakeroot libffi rubygem-fpm
             git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
           run: |
-            gmake install-go
             go mod download
             go mod tidy
             go install golang.org/x/tools/cmd/goimports@latest
-            gmake cloudflared cleanup-go
+            gmake cloudflared
 
       # Build step for NetBSD
       - name: Build from Source on NetBSD
@@ -76,11 +75,10 @@ jobs:
             gem install fpm
             git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
           run: |
-            gmake install-go
             go mod download
             go mod tidy
             go install golang.org/x/tools/cmd/goimports@latest
-            gmake cloudflared cleanup-go
+            gmake cloudflared
 
       # Build step for OpenBSD
       - name: Build from Source on OpenBSD
@@ -96,11 +94,10 @@ jobs:
             gem34 install fpm
             git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
           run: |
-            gmake install-go
             go mod download
             go mod tidy
             go install golang.org/x/tools/cmd/goimports@latest
-            gmake cloudflared cleanup-go
+            gmake cloudflared
 
       - name: Authenticate GH CLI
         run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
