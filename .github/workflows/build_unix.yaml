@@ -67,7 +67,7 @@ jobs:
           usesh: true
           mem: 4096
           prepare: |
-            export PATH=/usr/sbin:$PATH
+            export PATH=/sbin:/usr/sbin:/bin:/usr/bin:/usr/pkg/sbin:/usr/pkg/bin:$PATH
             PKG_PATH="https://cdn.NetBSD.org/pub/pkgsrc/packages/NetBSD/$(uname -p)/$(uname -r | cut -f '1 2' -d.)/All/"
             export PKG_PATH
             pkg_add -U pkgin pkg_alternatives
