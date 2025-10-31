@@ -3,6 +3,7 @@ name: New cloudflared Release
 permissions:
   contents: write
   pull-requests: write
+  actions: write
 
 on:
   schedule:
@@ -140,6 +141,7 @@ jobs:
 
             let kept = 0;
             let page = 1;
+            let permissionDenied = false;
 
             while (true) {
               const { data } = await github.rest.actions.listWorkflowRuns({
@@ -157,6 +159,10 @@ jobs:
               }
 
               for (const run of runs) {
+                if (permissionDenied) {
+                  break;
+                }
+
                 if (run.conclusion !== 'success') {
                   continue;
                 }
@@ -167,11 +173,24 @@ jobs:
                 }
 
                 core.info(`Deleting run ${run.id} from ${run.created_at}`);
-                await github.rest.actions.deleteWorkflowRun({
-                  owner,
-                  repo,
-                  run_id: run.id
-                });
+                try {
+                  await github.rest.actions.deleteWorkflowRun({
+                    owner,
+                    repo,
+                    run_id: run.id
+                  });
+                } catch (error) {
+                  if (error.status === 403) {
+                    core.warning('GITHUB_TOKEN lacks permission to delete workflow runs; skipping further pruning.');
+                    permissionDenied = true;
+                    break;
+                  }
+                  throw error;
+                }
+              }
+
+              if (permissionDenied) {
+                break;
               }
 
               if (runs.length < 100) {
