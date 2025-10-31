@@ -3,10 +3,16 @@ name: Build Native
 on:
   release:
     types: [created, published]
+  workflow_run:
+    workflows:
+      - New cloudflared Release
+    types:
+      - completed
   workflow_dispatch:
 
 jobs:
   build:
+    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -110,3 +116,59 @@ jobs:
           gh release upload "${{ steps.get_release.outputs.tag_name }}" \
             ${{ matrix.assetName }} \
             --clobber
+
+      - name: Prune older successful runs
+        if: success()
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const keepSuccessfulRuns = 7;
+            const workflowRef = process.env.GITHUB_WORKFLOW_REF || '';
+            const workflowFile = workflowRef
+              ? workflowRef.split('@')[0].split('/').pop()
+              : 'build_unix.yaml';
+
+            let kept = 0;
+            let page = 1;
+
+            while (true) {
+              const { data } = await github.rest.actions.listWorkflowRuns({
+                owner,
+                repo,
+                workflow_id: workflowFile,
+                status: 'completed',
+                per_page: 100,
+                page
+              });
+
+              const runs = data.workflow_runs;
+              if (!runs.length) {
+                break;
+              }
+
+              for (const run of runs) {
+                if (run.conclusion !== 'success') {
+                  continue;
+                }
+
+                kept += 1;
+                if (kept <= keepSuccessfulRuns) {
+                  continue;
+                }
+
+                core.info(`Deleting run ${run.id} from ${run.created_at}`);
+                await github.rest.actions.deleteWorkflowRun({
+                  owner,
+                  repo,
+                  run_id: run.id
+                });
+              }
+
+              if (runs.length < 100) {
+                break;
+              }
+
+              page += 1;
+            }
