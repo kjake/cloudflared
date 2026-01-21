@@ -59,9 +59,11 @@ jobs:
           usesh: true
           mem: 4096
           prepare: |
-            pkg-static bootstrap -f
-            pkg-upgrade -f
-            pkg install -y gmake sudo bash git go golangci-lint curl wget fakeroot libffi rubygem-fpm
+            export ASSUME_ALWAYS_YES=yes
+            /usr/sbin/pkg-static bootstrap -f
+            pkg update -f
+            pkg upgrade -f -y
+            pkg install -f -y pcre2 gmake sudo bash git go golangci-lint curl wget fakeroot libffi rubygem-fpm
             git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
           run: |
             go mod download
