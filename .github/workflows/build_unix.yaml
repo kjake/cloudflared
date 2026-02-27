@@ -5,18 +5,21 @@ permissions:
   actions: write
 
 on:
-  release:
-    types: [created, published]
-  workflow_run:
-    workflows:
-      - New cloudflared Release
-    types:
-      - completed
+  workflow_call:
+    inputs:
+      tag:
+        description: Release tag to build and upload
+        required: true
+        type: string
   workflow_dispatch:
+    inputs:
+      tag:
+        description: Release tag to build and upload (defaults to latest published release)
+        required: false
+        type: string
 
 jobs:
   build:
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
     strategy:
       matrix:
@@ -31,19 +34,29 @@ jobs:
       GOEXPERIMENT: "noboringcrypto"
       CGO_ENABLED: 0
     steps:
-      - name: Get latest release tag
+      - name: Resolve release tag
         id: get_release
         uses: actions/github-script@v6
+        env:
+          TAG_INPUT: ${{ inputs.tag }}
         with:
           script: |
+            const tagInput = (process.env.TAG_INPUT || '').trim();
+            if (tagInput) {
+              core.info(`Using provided tag: ${tagInput}`);
+              core.setOutput('tag_name', tagInput);
+              return;
+            }
+
             const { data } = await github.rest.repos.getLatestRelease({
               owner: context.repo.owner,
               repo:  context.repo.repo
             });
+            core.info(`Using latest published release tag: ${data.tag_name}`);
             core.setOutput('tag_name', data.tag_name);
 
       - name: Checkout Release Tag
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: ${{ steps.get_release.outputs.tag_name }}
           fetch-depth: 0

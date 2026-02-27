@@ -15,8 +15,12 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  update:
+  prepare:
     runs-on: ubuntu-latest
+    outputs:
+      needs_update: ${{ steps.update_guard.outputs.needs_update }}
+      tag: ${{ steps.update_guard.outputs.tag }}
+      title: ${{ steps.update_guard.outputs.title }}
     steps:
       - name: Get latest upstream release info
         id: upstream_release
@@ -67,18 +71,24 @@ jobs:
           fi
 
           echo "needs_update=true" >> "$GITHUB_OUTPUT"
-          echo "TAG=${UPSTREAM_TAG}" >> "$GITHUB_ENV"
-          echo "TITLE=${UPSTREAM_TITLE}" >> "$GITHUB_ENV"
+          echo "tag=${UPSTREAM_TAG}" >> "$GITHUB_OUTPUT"
+          {
+            echo 'title<<EOF'
+            echo "${UPSTREAM_TITLE}"
+            echo 'EOF'
+          } >> "$GITHUB_OUTPUT"
 
       - name: Checkout customizations branch
         if: steps.update_guard.outputs.needs_update == 'true'
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           ref: customizations
           fetch-depth: 0
 
       - name: Prepare release branch
         if: steps.update_guard.outputs.needs_update == 'true'
+        env:
+          TAG: ${{ steps.update_guard.outputs.tag }}
         run: |
           git config user.name 'github-actions[bot]'
           git config user.email 'github-actions[bot]@users.noreply.github.com'
@@ -111,20 +121,114 @@ jobs:
           git commit -m "chore: apply customizations on ${TAG}"
           git push --force-with-lease origin "${branch}"
 
-      - name: Create GitHub Release
+      - name: Create or update draft release
         if: steps.update_guard.outputs.needs_update == 'true'
-        uses: softprops/action-gh-release@v1
-        with:
-          tag_name: ${{ env.TAG }}
-          name: ${{ env.TITLE }}
-          body: |
-            Automated cloudflared release of version **${{ env.TAG }}**
-            Stock upstream cloudflared with BSD tweaks from `customizations` branch in this repo.
-          draft: false
-          prerelease: false
-          target_commitish: release-${{ env.TAG }}
+        uses: actions/github-script@v6
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.update_guard.outputs.tag }}
+          TITLE: ${{ steps.update_guard.outputs.title }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const tag = process.env.TAG;
+            const title = process.env.TITLE || tag;
+            const targetCommitish = `release-${tag}`;
+            const body = [
+              `Automated cloudflared release of version **${tag}**`,
+              'Stock upstream cloudflared with BSD tweaks from `customizations` branch in this repo.'
+            ].join('\n');
+
+            try {
+              const { data: existing } = await github.rest.repos.getReleaseByTag({
+                owner,
+                repo,
+                tag
+              });
+
+              await github.rest.repos.updateRelease({
+                owner,
+                repo,
+                release_id: existing.id,
+                tag_name: tag,
+                target_commitish: targetCommitish,
+                name: title,
+                body,
+                draft: true,
+                prerelease: false
+              });
+
+              core.info(`Updated existing draft release for ${tag}.`);
+            } catch (error) {
+              if (error.status !== 404) {
+                throw error;
+              }
+
+              await github.rest.repos.createRelease({
+                owner,
+                repo,
+                tag_name: tag,
+                target_commitish: targetCommitish,
+                name: title,
+                body,
+                draft: true,
+                prerelease: false
+              });
+
+              core.info(`Created draft release for ${tag}.`);
+            }
+
+  build_native:
+    if: needs.prepare.outputs.needs_update == 'true'
+    needs: prepare
+    permissions:
+      contents: write
+      actions: write
+    uses: ./.github/workflows/build_unix.yaml
+    with:
+      tag: ${{ needs.prepare.outputs.tag }}
+    secrets: inherit
+
+  publish_release:
+    if: needs.prepare.outputs.needs_update == 'true' && needs.build_native.result == 'success'
+    needs:
+      - prepare
+      - build_native
+    runs-on: ubuntu-latest
+    steps:
+      - name: Publish draft release
+        uses: actions/github-script@v6
+        env:
+          TAG: ${{ needs.prepare.outputs.tag }}
+          TITLE: ${{ needs.prepare.outputs.title }}
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const tag = process.env.TAG;
+            const title = process.env.TITLE || tag;
+
+            const { data: release } = await github.rest.repos.getReleaseByTag({
+              owner,
+              repo,
+              tag
+            });
+
+            if (!release.draft) {
+              core.info(`Release ${tag} is already published.`);
+              return;
+            }
+
+            await github.rest.repos.updateRelease({
+              owner,
+              repo,
+              release_id: release.id,
+              name: title,
+              draft: false,
+              prerelease: false
+            });
+
+            core.info(`Published release ${tag}.`);
 
       - name: Prune older successful runs
         if: success()
@@ -199,4 +303,3 @@ jobs:
 
               page += 1;
             }
-
