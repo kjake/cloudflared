@@ -119,7 +119,6 @@ jobs:
             connection/quic_connection.go \
             supervisor/tunnel.go \
             supervisor/tunnel_test.go \
-            README.md \
             Makefile
 
           # 5) Finalise and push
