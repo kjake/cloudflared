@@ -28,6 +28,32 @@ chmod +x update-cloudflared.sh
 ./update-cloudflared.sh /usr/local/bin/cloudflared
 ```
 
+## OPNsense / FreeBSD QUIC stability tuning
+
+If logs intermittently show:
+- `failed to accept QUIC stream: timeout: no recent network activity`
+- `failed to accept QUIC stream: Application error 0x0 (remote)`
+
+you can improve stability by increasing UDP socket buffers and disabling QUIC PMTU discovery.
+
+Runtime commands:
+
+```sh
+sysctl kern.ipc.maxsockbuf=16777216
+sysctl net.inet.udp.recvspace=8388608
+sysrc cloudflared_mode='tunnel --no-autoupdate --quic-disable-pmtu-discovery run'
+service cloudflared restart
+```
+
+Persist across reboot on OPNsense:
+- `System -> Settings -> Tunables`
+- Add or update:
+  - `kern.ipc.maxsockbuf = 16777216`
+  - `net.inet.udp.recvspace = 8388608`
+
+Notes:
+- Occasional `Application error 0x0 (remote)` can still occur and does not by itself prove packet corruption.
+- `--quic-disable-pmtu-discovery` must appear before `run`.
 
 ## Branching Model
 
@@ -45,7 +71,6 @@ chmod +x update-cloudflared.sh
 ## Getting Started
 
 1. **Clone your fork**
-
    ```sh
    git clone https://github.com/<your-org>/cloudflared.git
    cd cloudflared

@@ -114,6 +114,12 @@ jobs:
             diagnostic/system_collector_unix.go \
             ingress/icmp_posix.go \
             ingress/icmp_posix_test.go \
+            connection/errors.go \
+            connection/errors_test.go \
+            connection/quic_connection.go \
+            supervisor/tunnel.go \
+            supervisor/tunnel_test.go \
+            README.md \
             Makefile
 
           # 5) Finalise and push
