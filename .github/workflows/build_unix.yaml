@@ -72,8 +72,20 @@ jobs:
           usesh: true
           mem: 4096
           prepare: |
+            export PATH=/sbin:/usr/sbin:/bin:/usr/bin:/usr/local/sbin:/usr/local/bin:$PATH
             export ASSUME_ALWAYS_YES=yes
-            /usr/sbin/pkg-static bootstrap -f
+            if [ -x /usr/sbin/pkg-static ]; then
+              /usr/sbin/pkg-static bootstrap -f
+            elif [ -x /usr/sbin/pkg ]; then
+              /usr/sbin/pkg bootstrap -f
+            elif command -v pkg-static >/dev/null 2>&1; then
+              pkg-static bootstrap -f
+            elif command -v pkg >/dev/null 2>&1; then
+              pkg bootstrap -f
+            else
+              echo "Error: unable to find pkg bootstrap command" >&2
+              exit 1
+            fi
             pkg update -f
             pkg upgrade -f -y
             pkg install -f -y pcre2 gmake sudo bash git go golangci-lint curl wget fakeroot libffi rubygem-fpm
