@@ -21,6 +21,7 @@ jobs:
       needs_update: ${{ steps.update_guard.outputs.needs_update }}
       tag: ${{ steps.update_guard.outputs.tag }}
       title: ${{ steps.update_guard.outputs.title }}
+      release_id: ${{ steps.draft_release.outputs.release_id }}
     steps:
       - name: Get latest upstream release info
         id: upstream_release
@@ -127,6 +128,7 @@ jobs:
           git push --force-with-lease origin "${branch}"
 
       - name: Create or update draft release
+        id: draft_release
         if: steps.update_guard.outputs.needs_update == 'true'
         uses: actions/github-script@v6
         env:
@@ -143,14 +145,33 @@ jobs:
               `Automated cloudflared release of version **${tag}**`,
               'Stock upstream cloudflared with BSD tweaks from `customizations` branch in this repo.'
             ].join('\n');
+            const findReleaseByTag = async () => {
+              let page = 1;
 
-            try {
-              const { data: existing } = await github.rest.repos.getReleaseByTag({
-                owner,
-                repo,
-                tag
-              });
+              while (true) {
+                const { data } = await github.rest.repos.listReleases({
+                  owner,
+                  repo,
+                  per_page: 100,
+                  page
+                });
 
+                const match = data.find((release) => release.tag_name === tag);
+                if (match) {
+                  return match;
+                }
+
+                if (data.length < 100) {
+                  return null;
+                }
+
+                page += 1;
+              }
+            };
+
+            const existing = await findReleaseByTag();
+
+            if (existing) {
               await github.rest.repos.updateRelease({
                 owner,
                 repo,
@@ -163,25 +184,24 @@ jobs:
                 prerelease: false
               });
 
+              core.setOutput('release_id', String(existing.id));
               core.info(`Updated existing draft release for ${tag}.`);
-            } catch (error) {
-              if (error.status !== 404) {
-                throw error;
-              }
-
-              await github.rest.repos.createRelease({
-                owner,
-                repo,
-                tag_name: tag,
-                target_commitish: targetCommitish,
-                name: title,
-                body,
-                draft: true,
-                prerelease: false
-              });
-
-              core.info(`Created draft release for ${tag}.`);
+              return;
             }
+
+            const { data: created } = await github.rest.repos.createRelease({
+              owner,
+              repo,
+              tag_name: tag,
+              target_commitish: targetCommitish,
+              name: title,
+              body,
+              draft: true,
+              prerelease: false
+            });
+
+            core.setOutput('release_id', String(created.id));
+            core.info(`Created draft release for ${tag}.`);
 
   build_native:
     if: needs.prepare.outputs.needs_update == 'true'
@@ -206,18 +226,28 @@ jobs:
         env:
           TAG: ${{ needs.prepare.outputs.tag }}
           TITLE: ${{ needs.prepare.outputs.title }}
+          RELEASE_ID: ${{ needs.prepare.outputs.release_id }}
         with:
           script: |
             const owner = context.repo.owner;
             const repo = context.repo.repo;
             const tag = process.env.TAG;
             const title = process.env.TITLE || tag;
+            const releaseId = Number(process.env.RELEASE_ID);
 
-            const { data: release } = await github.rest.repos.getReleaseByTag({
+            if (!releaseId) {
+              throw new Error(`Missing release ID for tag ${tag}.`);
+            }
+
+            const { data: release } = await github.rest.repos.getRelease({
               owner,
               repo,
-              tag
+              release_id: releaseId
             });
+
+            if (release.tag_name !== tag) {
+              throw new Error(`Release ${releaseId} belongs to tag ${release.tag_name}, expected ${tag}.`);
+            }
 
             if (!release.draft) {
               core.info(`Release ${tag} is already published.`);
@@ -227,7 +257,7 @@ jobs:
             await github.rest.repos.updateRelease({
               owner,
               repo,
-              release_id: release.id,
+              release_id: releaseId,
               name: title,
               draft: false,
               prerelease: false
