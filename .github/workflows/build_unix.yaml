@@ -34,7 +34,7 @@ jobs:
       GOEXPERIMENT: "noboringcrypto"
       CGO_ENABLED: 0
     steps:
-      - name: Resolve release tag
+      - name: Resolve release ref
         id: get_release
         uses: actions/github-script@v6
         env:
@@ -42,23 +42,28 @@ jobs:
         with:
           script: |
             const tagInput = (process.env.TAG_INPUT || '').trim();
+            let tagName = tagInput;
+
             if (tagInput) {
               core.info(`Using provided tag: ${tagInput}`);
-              core.setOutput('tag_name', tagInput);
-              return;
+            } else {
+              const { data } = await github.rest.repos.getLatestRelease({
+                owner: context.repo.owner,
+                repo:  context.repo.repo
+              });
+              tagName = data.tag_name;
+              core.info(`Using latest published release tag: ${tagName}`);
             }
 
-            const { data } = await github.rest.repos.getLatestRelease({
-              owner: context.repo.owner,
-              repo:  context.repo.repo
-            });
-            core.info(`Using latest published release tag: ${data.tag_name}`);
-            core.setOutput('tag_name', data.tag_name);
+            const checkoutRef = `release-${tagName}`;
+            core.info(`Using release branch: ${checkoutRef}`);
+            core.setOutput('tag_name', tagName);
+            core.setOutput('checkout_ref', checkoutRef);
 
-      - name: Checkout Release Tag
+      - name: Checkout Release Branch
         uses: actions/checkout@v6
         with:
-          ref: ${{ steps.get_release.outputs.tag_name }}
+          ref: ${{ steps.get_release.outputs.checkout_ref }}
           fetch-depth: 0
           fetch-tags: true
 
