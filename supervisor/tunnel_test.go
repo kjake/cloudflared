@@ -124,3 +124,80 @@ func TestWaitForBackoffFallback(t *testing.T) {
 	ok = selectNextProtocol(&log, protoFallback, protocolSelector, &quic.IdleTimeoutError{})
 	assert.False(t, ok)
 }
+
+func TestSelectNextProtocolWrappedIdleTimeoutFallback(t *testing.T) {
+	maxRetries := uint(3)
+	backoff := retry.NewBackoff(maxRetries, 40*time.Millisecond, false)
+	backoff.Clock.After = immediateTimeAfter
+	log := zerolog.Nop()
+	resolveTTL := 10 * time.Second
+	mockFetcher := dynamicMockFetcher{
+		protocolPercents: edgediscovery.ProtocolPercents{{Protocol: "quic", Percentage: 100}},
+	}
+
+	protocolSelector, err := connection.NewProtocolSelector(
+		"auto",
+		"",
+		false,
+		false,
+		mockFetcher.fetch(),
+		resolveTTL,
+		&log,
+	)
+	assert.NoError(t, err)
+
+	protoFallback := &protocolFallback{
+		backoff,
+		protocolSelector.Current(),
+		false,
+	}
+	protoFallback.BackoffTimer() // simulate retry
+
+	ok := selectNextProtocol(
+		&log,
+		protoFallback,
+		protocolSelector,
+		&connection.StreamListenerError{Cause: &quic.IdleTimeoutError{}},
+	)
+	assert.True(t, ok)
+	assert.Equal(t, connection.HTTP2, protoFallback.protocol)
+}
+
+func TestSelectNextProtocolWrappedApplicationErrorNoFallback(t *testing.T) {
+	maxRetries := uint(3)
+	backoff := retry.NewBackoff(maxRetries, 40*time.Millisecond, false)
+	backoff.Clock.After = immediateTimeAfter
+	log := zerolog.Nop()
+	resolveTTL := 10 * time.Second
+	mockFetcher := dynamicMockFetcher{
+		protocolPercents: edgediscovery.ProtocolPercents{{Protocol: "quic", Percentage: 100}},
+	}
+
+	protocolSelector, err := connection.NewProtocolSelector(
+		"auto",
+		"",
+		false,
+		false,
+		mockFetcher.fetch(),
+		resolveTTL,
+		&log,
+	)
+	assert.NoError(t, err)
+
+	initialProtocol := protocolSelector.Current()
+	protoFallback := &protocolFallback{
+		backoff,
+		initialProtocol,
+		false,
+	}
+	protoFallback.BackoffTimer() // simulate retry
+
+	ok := selectNextProtocol(
+		&log,
+		protoFallback,
+		protocolSelector,
+		&connection.StreamListenerError{Cause: &quic.ApplicationError{Remote: true, ErrorCode: 0}},
+	)
+	assert.True(t, ok)
+	assert.Equal(t, initialProtocol, protoFallback.protocol)
+}
