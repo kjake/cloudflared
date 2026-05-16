@@ -36,7 +36,7 @@ jobs:
     steps:
       - name: Resolve release ref
         id: get_release
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         env:
           TAG_INPUT: ${{ inputs.tag }}
         with:
@@ -157,7 +157,7 @@ jobs:
 
       - name: Prune older successful runs
         if: success()
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             const owner = context.repo.owner;

@@ -25,7 +25,7 @@ jobs:
     steps:
       - name: Get latest upstream release info
         id: upstream_release
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             const { data } = await github.rest.repos.getLatestRelease({
@@ -37,7 +37,7 @@ jobs:
 
       - name: Get latest release in this repo (if any)
         id: current_release
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             try {
@@ -107,7 +107,7 @@ jobs:
           git fetch origin customizations
           git merge --no-commit --no-ff origin/customizations || true
 
-          # 4) Re-apply your own workflows
+          # 4) Re-apply BSD-portability file overlays (these shims rarely drift in upstream)
           rm -rf .github/workflows
           git checkout origin/customizations -- \
             diagnostic/network/collector_unix_test.go \
@@ -115,14 +115,31 @@ jobs:
             diagnostic/system_collector_unix.go \
             ingress/icmp_posix.go \
             ingress/icmp_posix_test.go \
+            Makefile \
+            patches
+
+          # 5) Reset QUIC-related files to pristine upstream — the customizations
+          #    branch still carries stale full-file copies of these from an older
+          #    upstream base, which the step-3 merge leaves with conflict markers.
+          #    The .patch in step 6 replaces them with the surgical delta we care about.
+          #    (connection/errors_test.go from customizations is added net-new and
+          #    has no upstream counterpart; we leave it where step 3 placed it.)
+          git checkout "refs/tags/${TAG}" -- \
             connection/errors.go \
-            connection/errors_test.go \
             connection/quic_connection.go \
             supervisor/tunnel.go \
-            supervisor/tunnel_test.go \
-            Makefile
+            supervisor/tunnel_test.go
 
-          # 5) Finalise and push
+          # 6) Apply surgical patches for QUIC behavior changes.
+          #    Patches express *intent* and survive surrounding upstream churn.
+          #    If a patch fails to apply, this fails the workflow loudly so a
+          #    human can re-derive the patch against the new upstream state.
+          for patch in patches/*.patch; do
+            echo "→ Applying ${patch}"
+            git apply --3way "${patch}"
+          done
+
+          # 7) Finalise and push
           git add -A
           git commit -m "chore: apply customizations on ${TAG}"
           git push --force-with-lease origin "${branch}"
@@ -130,7 +147,7 @@ jobs:
       - name: Create or update draft release
         id: draft_release
         if: steps.update_guard.outputs.needs_update == 'true'
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         env:
           TAG: ${{ steps.update_guard.outputs.tag }}
           TITLE: ${{ steps.update_guard.outputs.title }}
@@ -222,7 +239,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Publish draft release
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         env:
           TAG: ${{ needs.prepare.outputs.tag }}
           TITLE: ${{ needs.prepare.outputs.title }}
@@ -267,7 +284,7 @@ jobs:
 
       - name: Prune older successful runs
         if: success()
-        uses: actions/github-script@v6
+        uses: actions/github-script@v8
         with:
           script: |
             const owner = context.repo.owner;
