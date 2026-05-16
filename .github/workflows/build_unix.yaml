@@ -33,6 +33,10 @@ jobs:
     env:
       GOEXPERIMENT: "noboringcrypto"
       CGO_ENABLED: 0
+      # BSD pkg managers ship Go with GOTOOLCHAIN=local baked in to disable
+      # runtime downloads. Override so go.mod's `go 1.26` directive triggers
+      # a toolchain auto-download from go.dev (binaries exist for all 3 BSDs).
+      GOTOOLCHAIN: auto
     steps:
       - name: Resolve release ref
         id: get_release
@@ -72,8 +76,8 @@ jobs:
         if: matrix.os == 'freebsd'
         uses: vmactions/freebsd-vm@v1
         with:
-          release: "14.2"
-          envs: "GOEXPERIMENT CGO_ENABLED"
+          release: "14.3"
+          envs: "GOEXPERIMENT CGO_ENABLED GOTOOLCHAIN"
           usesh: true
           mem: 4096
           prepare: |
@@ -107,7 +111,7 @@ jobs:
         uses: vmactions/netbsd-vm@v1
         with:
           release: "10.1"
-          envs: "GOEXPERIMENT CGO_ENABLED"
+          envs: "GOEXPERIMENT CGO_ENABLED GOTOOLCHAIN"
           usesh: true
           mem: 4096
           prepare: |
@@ -131,8 +135,8 @@ jobs:
         if: matrix.os == 'openbsd'
         uses: vmactions/openbsd-vm@v1
         with:
-          release: "7.7"
-          envs: "GOEXPERIMENT CGO_ENABLED"
+          release: "7.8"
+          envs: "GOEXPERIMENT CGO_ENABLED GOTOOLCHAIN"
           usesh: true
           mem: 4096
           prepare: |
