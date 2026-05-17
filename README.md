@@ -1,98 +1,101 @@
 # cloudflared for *BSD
 
-This repository maintains a fork of `cloudflare/cloudflared` with minimal customizations in order to build for most *BSD systems.  
-The supported automated builds are attached to the Releases area.
+This is a fork of [cloudflare/cloudflared](https://github.com/cloudflare/cloudflared) that ships official binaries for FreeBSD, NetBSD, and OpenBSD. Cloudflare doesn't publish *BSD builds; this fork adds a thin overlay of BSD-portability shims and a CI pipeline that builds inside real BSD VMs (not cross-compiled from Linux). The binary is functionally identical to upstream — same tunnels, WARP routing, SSH proxy, diagnostic, and ingress code paths. The only behavioral deviation is captured in [`patches/`](patches/), currently a single QUIC error-preservation tweak (see issue #10).
 
-The current supported build targets are:
-* FreeBSD 14 (amd64)
-* OpenBSD 7 (amd64)
-* NetBSD 10 (amd64)
+Upstream is polled every 12 hours; a new upstream release produces a matching release here, usually within a few hours of upstream's announcement.
 
-Builds happen on virtual machines and are not cross-compiled in Linux:
-```yaml
-cloudflared-freebsd14-amd64: ELF 64-bit LSB executable, x86-64, version 1 (FreeBSD), statically linked, for FreeBSD 12.3, FreeBSD-style, Go BuildID=whtbnhgLy_4DNlvoQVLN/sdPbSLy5tutf2R4FBg0D/tkLU1W0BkczEJ-UfmxXi/-wnnwpjpQM5JSMNpsu8B, with debug_info, not stripped
+## Supported targets
 
-cloudflared-openbsd7-amd64: ELF 64-bit LSB executable, x86-64, version 1 (OpenBSD), dynamically linked, interpreter /usr/libexec/ld.so, for OpenBSD, Go BuildID=sKt-KKXK70xaz3xIjpcG/DI00O_ESV89p0mlN2FHW/CxKapph2Ks5I7Pe4q00b/xlodVQBnz_4GDBLMx3C-, with debug_info, not stripped
+| OS      | Version | Architecture | Asset                         |
+| ------- | ------- | ------------ | ----------------------------- |
+| FreeBSD | 14      | amd64        | `cloudflared-freebsd14-amd64` |
+| OpenBSD | 7       | amd64        | `cloudflared-openbsd7-amd64`  |
+| NetBSD  | 10      | amd64        | `cloudflared-netbsd10-amd64`  |
 
-cloudflared-netbsd10-amd64: ELF 64-bit LSB executable, x86-64, version 1 (NetBSD), statically linked, for NetBSD 7.0, BuildID[sha1]=ee1a86cd4d2281c56b0c2e124f8337716aa22844, with debug_info, not stripped
-```
+See [Build provenance](#build-provenance) at the bottom for binary metadata.
 
-## Updating cloudflared
+## Install or update
 
-Grab the updater and run it:
+The same script handles first install and subsequent updates — it detects your OS, pulls the matching latest-release binary from this repo, and replaces the target path. If a `cloudflared` service is running, it'll be stopped and restarted around the swap.
 
-```bash
+```sh
 curl -fsSL https://raw.githubusercontent.com/kjake/cloudflared/customizations/update-cloudflared.sh \
   -o update-cloudflared.sh
 chmod +x update-cloudflared.sh
 ./update-cloudflared.sh /usr/local/bin/cloudflared
 ```
 
-## OPNsense / FreeBSD QUIC stability tuning
+The script is short (~110 lines) and has no checksum verification — trust derives from `raw.githubusercontent.com` plus the public CI pipeline in [`.github/workflows/`](.github/workflows/). Skim it before running.
+
+## Service setup
+
+Once the binary is in place, wire it into your init system and configure a tunnel. Service-install specifics vary by OS — check `cloudflared service --help` or hand-roll an rc.d script. For day-to-day operation:
+
+```sh
+# FreeBSD / OpenBSD (sysrc-style enable, then start)
+service cloudflared start
+service cloudflared restart
+service cloudflared stop
+```
+
+On OPNsense, the configured tunnel mode lives in `/etc/rc.conf` via `sysrc cloudflared_mode='...'` — see the QUIC tuning section below for an example.
+
+## QUIC stability tuning
 
 If logs intermittently show:
+
 - `failed to accept QUIC stream: timeout: no recent network activity`
 - `failed to accept QUIC stream: Application error 0x0 (remote)`
 
-you can improve stability by increasing UDP socket buffers and disabling QUIC PMTU discovery.
+you can improve stability by increasing UDP socket buffers and (if that's not enough) disabling QUIC path-MTU discovery.
 
-Runtime commands:
+**Runtime:**
 
 ```sh
 sysctl kern.ipc.maxsockbuf=16777216
 sysctl net.inet.udp.recvspace=8388608
+```
+
+**Persist (FreeBSD / NetBSD)** — append to `/etc/sysctl.conf`:
+
+```conf
+kern.ipc.maxsockbuf=16777216
+net.inet.udp.recvspace=8388608
+```
+
+**Persist (OPNsense)** — System → Settings → Tunables, add the same two `kern.ipc.maxsockbuf` and `net.inet.udp.recvspace` values.
+
+**Disable PMTU discovery** for cloudflared if QUIC still misbehaves:
+
+```sh
 sysrc cloudflared_mode='tunnel --no-autoupdate --quic-disable-pmtu-discovery run'
 service cloudflared restart
 ```
 
-Persist across reboot on OPNsense:
-- `System -> Settings -> Tunables`
-- Add or update:
-  - `kern.ipc.maxsockbuf = 16777216`
-  - `net.inet.udp.recvspace = 8388608`
+`--quic-disable-pmtu-discovery` must appear before `run`. Occasional `Application error 0x0 (remote)` can still occur after tuning and does not by itself prove packet corruption.
 
-Notes:
-- Occasional `Application error 0x0 (remote)` can still occur and does not by itself prove packet corruption.
-- `--quic-disable-pmtu-discovery` must appear before `run`.
+## How upstream tracking works
 
-## Branching Model
+Two branches matter:
 
-* **`customizations` (default)**
+- **`customizations`** (default) — the persistent thin overlay. Contains the build workflows, BSD-portability shims for `diagnostic/` and `ingress/`, the BSD-aware `Makefile`, [`patches/`](patches/), the install script, and this README. Nothing else.
+- **`release-<tag>`** (auto-generated) — created on every new upstream release by [`.github/workflows/update-cloudflared.yml`](.github/workflows/update-cloudflared.yml). Starts from upstream's tag, overlays the customizations files, applies `patches/*.patch`, and force-pushes. These branches are throwaway build artifacts — don't open PRs against them.
 
-  * Contains *only* our fork-specific changes (CI config, workflows, branding, etc.).
-  * Users and automation never push directly to this branch—it serves as the persistent overlay.
+To contribute, open issues or PRs against `customizations`. Upstream bugs and feature requests should still go to [cloudflare/cloudflared](https://github.com/cloudflare/cloudflared); this fork has historically had a low rate of upstream patch acceptance, which is why it exists.
 
-* **`release-<tag>`**
+## Build provenance
 
-  * Created automatically (or manually) for each new upstream release tag (e.g. `release-2025.4.2`).
-  * Merges the upstream tag, then applies `customizations` on top.
-  * Open a PR from this branch into `customizations` to review upstream changes + overlay.
+Binaries are built inside real BSD VMs in CI (`vmactions/freebsd-vm@v1`, `netbsd-vm@v1`, `openbsd-vm@v1`), not cross-compiled from Linux. Resulting `file` output:
 
-## Getting Started
+```text
+cloudflared-freebsd14-amd64: ELF 64-bit LSB executable, x86-64, version 1 (FreeBSD), statically linked, for FreeBSD 12.3, FreeBSD-style, Go BuildID=…, with debug_info, not stripped
 
-1. **Clone your fork**
-   ```sh
-   git clone https://github.com/<your-org>/cloudflared.git
-   cd cloudflared
-   ```
+cloudflared-openbsd7-amd64:  ELF 64-bit LSB executable, x86-64, version 1 (OpenBSD), dynamically linked, interpreter /usr/libexec/ld.so, for OpenBSD, Go BuildID=…, with debug_info, not stripped
 
-2. **Verify `customizations` is default**
+cloudflared-netbsd10-amd64:  ELF 64-bit LSB executable, x86-64, version 1 (NetBSD), statically linked, for NetBSD 7.0, BuildID[sha1]=…, with debug_info, not stripped
+```
 
-   ```sh
-   git branch --show-current  # should output: customizations
-   ```
+Two things worth knowing:
 
-3. **Update README**
-   Simply edit this file and push to `customizations`:
-
-   ```sh
-   git checkout customizations
-   git add README.md
-   git commit -m "docs: update README"
-   git push origin customizations
-   ```
-
-## Contributing
-
-1. Open issues or PRs against **`customizations`** for any improvements to workflows, docs, or configs.
-2. Upstream bugs/features should still be filed against [cloudflare/cloudflared](https://github.com/cloudflare/cloudflared).
+- **OpenBSD dynamically links** by policy — the OS doesn't ship a static libc, and Go follows suit.
+- **"for FreeBSD 12.3" / "for NetBSD 7.0"** are Go's runtime baseline (minimum kernel version the binary will run on), set by the Go linker as a fixed ELF note — not derived from the build host. Inspect it with `readelf -n <binary> | grep -A2 FreeBSD`. The build host versions are listed in [Supported targets](#supported-targets).
