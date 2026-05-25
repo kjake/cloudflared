@@ -100,8 +100,11 @@ jobs:
             pkg install -f -y pcre2 gmake sudo bash git go golangci-lint curl wget fakeroot libffi rubygem-fpm
             git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
           run: |
+            # Do NOT run `go mod tidy` here — it sees only the current GOOS's
+            # import graph and prunes vendor/modules.txt entries used on other
+            # platforms, which then breaks `-mod=vendor` for those packages.
+            # Upstream's vendor tree is already complete; trust it.
             go mod download
-            go mod tidy
             go install golang.org/x/tools/cmd/goimports@latest
             gmake cloudflared
 
@@ -125,8 +128,11 @@ jobs:
             gem install fpm
             git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
           run: |
+            # Do NOT run `go mod tidy` here — it sees only the current GOOS's
+            # import graph and prunes vendor/modules.txt entries used on other
+            # platforms, which then breaks `-mod=vendor` for those packages.
+            # Upstream's vendor tree is already complete; trust it.
             go mod download
-            go mod tidy
             go install golang.org/x/tools/cmd/goimports@latest
             gmake cloudflared
 
@@ -144,8 +150,11 @@ jobs:
             gem34 install fpm
             git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
           run: |
+            # Do NOT run `go mod tidy` here — it sees only the current GOOS's
+            # import graph and prunes vendor/modules.txt entries used on other
+            # platforms, which then breaks `-mod=vendor` for those packages.
+            # Upstream's vendor tree is already complete; trust it.
             go mod download
-            go mod tidy
             go install golang.org/x/tools/cmd/goimports@latest
             gmake cloudflared
 
