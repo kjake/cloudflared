@@ -1,0 +1,101 @@
+From: kjake <kjake@users.noreply.github.com>
+Subject: [PATCH] connection: preserve QUIC stream error causes for timeout fallback
+
+Adds a Cause field plus Unwrap() to ControlStreamError, StreamListenerError,
+and DatagramManagerError, and threads the underlying error through at every
+construction site in quic_connection.go.
+
+Without this, upstream's supervisor.isQuicBroken() cannot see through these
+empty-struct wrappers to the underlying quic.IdleTimeoutError /
+quic.TransportError, so the HTTP/2 fallback path never triggers on BSDs where
+QUIC misbehaves (kjake/cloudflared#10).
+
+Apply with `git apply --3way patches/0001-preserve-quic-stream-error-causes.patch`
+from a checkout of the target upstream cloudflared release tag. If a hunk fails
+to apply, upstream has likely refactored these error types — re-derive the diff
+from the current upstream `connection/errors.go` and `connection/quic_connection.go`.
+
+---
+diff --git a/connection/errors.go b/connection/errors.go
+index 2cc60566..d3d9c01f 100644
+--- a/connection/errors.go
++++ b/connection/errors.go
+@@ -52,7 +52,9 @@ func serverRegistrationErrorFromRPC(err error) ServerRegisterTunnelError {
+ 	}
+ }
+
+-type ControlStreamError struct{}
++type ControlStreamError struct {
++	Cause error
++}
+
+ var _ error = &ControlStreamError{}
+
+@@ -60,7 +62,13 @@ func (e *ControlStreamError) Error() string {
+ 	return "control stream encountered a failure while serving"
+ }
+
+-type StreamListenerError struct{}
++func (e *ControlStreamError) Unwrap() error {
++	return e.Cause
++}
++
++type StreamListenerError struct {
++	Cause error
++}
+
+ var _ error = &StreamListenerError{}
+
+@@ -68,10 +76,20 @@ func (e *StreamListenerError) Error() string {
+ 	return "accept stream listener encountered a failure while serving"
+ }
+
+-type DatagramManagerError struct{}
++func (e *StreamListenerError) Unwrap() error {
++	return e.Cause
++}
++
++type DatagramManagerError struct {
++	Cause error
++}
+
+ var _ error = &DatagramManagerError{}
+
+ func (e *DatagramManagerError) Error() string {
+ 	return "datagram manager encountered a failure while serving"
+ }
++
++func (e *DatagramManagerError) Unwrap() error {
++	return e.Cause
++}
+diff --git a/connection/quic_connection.go b/connection/quic_connection.go
+index 88d1e7a2..1646c7f9 100644
+--- a/connection/quic_connection.go
++++ b/connection/quic_connection.go
+@@ -120,7 +120,7 @@ func (q *quicConnection) Serve(ctx context.Context) error {
+ 		if err != nil {
+ 			q.logger.Error().Err(err).Msg("failed to serve the control stream")
+ 		}
+-		return &ControlStreamError{}
++		return &ControlStreamError{Cause: err}
+ 	})
+ 	// Start the accept stream loop routine
+ 	errGroup.Go(func() error {
+@@ -128,7 +128,7 @@ func (q *quicConnection) Serve(ctx context.Context) error {
+ 		if err != nil {
+ 			q.logger.Error().Err(err).Msg("failed to accept incoming stream requests")
+ 		}
+-		return &StreamListenerError{}
++		return &StreamListenerError{Cause: err}
+ 	})
+ 	// Start the datagram handler routine
+ 	errGroup.Go(func() error {
+@@ -136,7 +136,7 @@ func (q *quicConnection) Serve(ctx context.Context) error {
+ 		if err != nil {
+ 			q.logger.Error().Err(err).Msg("failed to run the datagram handler")
+ 		}
+-		return &DatagramManagerError{}
++		return &DatagramManagerError{Cause: err}
+ 	})
+
+ 	return errGroup.Wait()
