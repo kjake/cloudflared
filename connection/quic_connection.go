@@ -120,7 +120,7 @@ func (q *quicConnection) Serve(ctx context.Context) error {
 		if err != nil {
 			q.logger.Error().Err(err).Msg("failed to serve the control stream")
 		}
-		return &ControlStreamError{}
+		return &ControlStreamError{Cause: err}
 	})
 	// Start the accept stream loop routine
 	errGroup.Go(func() error {
@@ -128,7 +128,7 @@ func (q *quicConnection) Serve(ctx context.Context) error {
 		if err != nil {
 			q.logger.Error().Err(err).Msg("failed to accept incoming stream requests")
 		}
-		return &StreamListenerError{}
+		return &StreamListenerError{Cause: err}
 	})
 	// Start the datagram handler routine
 	errGroup.Go(func() error {
@@ -136,7 +136,7 @@ func (q *quicConnection) Serve(ctx context.Context) error {
 		if err != nil {
 			q.logger.Error().Err(err).Msg("failed to run the datagram handler")
 		}
-		return &DatagramManagerError{}
+		return &DatagramManagerError{Cause: err}
 	})
 
 	return errGroup.Wait()
