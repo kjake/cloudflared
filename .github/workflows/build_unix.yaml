@@ -106,7 +106,11 @@ jobs:
             # Upstream's vendor tree is already complete; trust it.
             go mod download
             go install golang.org/x/tools/cmd/goimports@latest
-            gmake cloudflared
+            # Stamp the release tag into the binary (main.Version). The build
+            # runs while the GitHub release is still a draft, so the git tag
+            # does not exist yet and the Makefile's `git describe` would fall
+            # back to a bare commit SHA. Passing VERSION explicitly overrides it.
+            gmake cloudflared VERSION="${{ steps.get_release.outputs.tag_name }}"
 
       # Build step for NetBSD
       - name: Build from Source on NetBSD
@@ -134,7 +138,11 @@ jobs:
             # Upstream's vendor tree is already complete; trust it.
             go mod download
             go install golang.org/x/tools/cmd/goimports@latest
-            gmake cloudflared
+            # Stamp the release tag into the binary (main.Version). The build
+            # runs while the GitHub release is still a draft, so the git tag
+            # does not exist yet and the Makefile's `git describe` would fall
+            # back to a bare commit SHA. Passing VERSION explicitly overrides it.
+            gmake cloudflared VERSION="${{ steps.get_release.outputs.tag_name }}"
 
       # Build step for OpenBSD
       - name: Build from Source on OpenBSD
@@ -156,7 +164,11 @@ jobs:
             # Upstream's vendor tree is already complete; trust it.
             go mod download
             go install golang.org/x/tools/cmd/goimports@latest
-            gmake cloudflared
+            # Stamp the release tag into the binary (main.Version). The build
+            # runs while the GitHub release is still a draft, so the git tag
+            # does not exist yet and the Makefile's `git describe` would fall
+            # back to a bare commit SHA. Passing VERSION explicitly overrides it.
+            gmake cloudflared VERSION="${{ steps.get_release.outputs.tag_name }}"
 
       - name: Authenticate GH CLI
         run: echo "${{ secrets.GITHUB_TOKEN }}" | gh auth login --with-token
