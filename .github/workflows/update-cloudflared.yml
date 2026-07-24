@@ -110,6 +110,7 @@ jobs:
           # 4) Re-apply BSD-portability file overlays (these shims rarely drift in upstream)
           rm -rf .github/workflows
           git checkout origin/customizations -- \
+            cmd/cloudflared/generic_service.go \
             diagnostic/network/collector_unix_test.go \
             diagnostic/network/collector_unix.go \
             diagnostic/system_collector_unix.go \
