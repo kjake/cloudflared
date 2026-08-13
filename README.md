@@ -8,9 +8,11 @@ Upstream is polled every 12 hours; a new upstream release produces a matching re
 
 | OS      | Version | Architecture | Asset                         |
 | ------- | ------- | ------------ | ----------------------------- |
-| FreeBSD | 14      | amd64        | `cloudflared-freebsd14-amd64` |
-| OpenBSD | 7       | amd64        | `cloudflared-openbsd7-amd64`  |
-| NetBSD  | 10      | amd64        | `cloudflared-netbsd10-amd64`  |
+| FreeBSD | 14.3    | amd64        | `cloudflared-freebsd14-amd64` |
+| FreeBSD | 15.1    | amd64        | `cloudflared-freebsd15-amd64` |
+| OpenBSD | 7.9     | amd64        | `cloudflared-openbsd7-amd64`  |
+| NetBSD  | 10.1    | amd64        | `cloudflared-netbsd10-amd64`  |
+| NetBSD  | 11.0    | amd64        | `cloudflared-netbsd11-amd64`  |
 
 See [Build provenance](#build-provenance) at the bottom for binary metadata.
 
