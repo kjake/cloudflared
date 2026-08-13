@@ -169,8 +169,12 @@ jobs:
           usesh: true
           mem: 4096
           prepare: |
-            pkg_add -xaz gmake sudo-- bash git go curl wget libffi ruby-34
-            gem34 install fpm
+            # cloudflared's build target only runs `gmake cloudflared` and never
+            # invokes fpm, so ruby/gem are intentionally omitted. On OpenBSD 7.9
+            # ruby 4.0 became the default and `pkg_add ruby-34` fuzzy-matched to
+            # ruby-4.0 (which ships gem40, not gem34), breaking the leg; dropping
+            # the unused ruby/fpm install removes that version-drift failure mode.
+            pkg_add -xaz gmake sudo-- bash git go curl wget
             git config --global --add safe.directory /home/runner/work/cloudflared/cloudflared
           run: |
             # Do NOT run `go mod tidy` here — it sees only the current GOOS's
