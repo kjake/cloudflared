@@ -22,13 +22,28 @@ jobs:
   build:
     runs-on: ubuntu-latest
     strategy:
+      # Don't let one leg's failure cancel the others — a new/older OS version
+      # breaking must not stop the proven ones from building and uploading.
+      fail-fast: false
       matrix:
         include:
+          # FreeBSD: keep 14.x and track 15.x (OPNsense 25.7+ is FreeBSD 15).
           - os: freebsd
+            release: "14.3"
             assetName: cloudflared-freebsd14-amd64
+          - os: freebsd
+            release: "15.1"
+            assetName: cloudflared-freebsd15-amd64
+          # NetBSD: keep 10.x and add 11.0.
           - os: netbsd
+            release: "10.1"
             assetName: cloudflared-netbsd10-amd64
+          - os: netbsd
+            release: "11.0"
+            assetName: cloudflared-netbsd11-amd64
+          # OpenBSD: single latest release.
           - os: openbsd
+            release: "7.9"
             assetName: cloudflared-openbsd7-amd64
     env:
       GOEXPERIMENT: "noboringcrypto"
@@ -76,7 +91,7 @@ jobs:
         if: matrix.os == 'freebsd'
         uses: vmactions/freebsd-vm@v1
         with:
-          release: "14.3"
+          release: "${{ matrix.release }}"
           envs: "GOEXPERIMENT CGO_ENABLED GOTOOLCHAIN"
           usesh: true
           mem: 4096
@@ -117,7 +132,7 @@ jobs:
         if: matrix.os == 'netbsd'
         uses: vmactions/netbsd-vm@v1
         with:
-          release: "10.1"
+          release: "${{ matrix.release }}"
           envs: "GOEXPERIMENT CGO_ENABLED GOTOOLCHAIN"
           usesh: true
           mem: 4096
@@ -149,7 +164,7 @@ jobs:
         if: matrix.os == 'openbsd'
         uses: vmactions/openbsd-vm@v1
         with:
-          release: "7.8"
+          release: "${{ matrix.release }}"
           envs: "GOEXPERIMENT CGO_ENABLED GOTOOLCHAIN"
           usesh: true
           mem: 4096
