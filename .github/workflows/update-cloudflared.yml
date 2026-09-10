@@ -103,11 +103,12 @@ jobs:
           # 2) Create new branch off the upstream tag
           git checkout -b "${branch}" "FETCH_HEAD"
 
-          # 3) Merge in your customizations
+          # 3) Overlay the BSD-portability files from `customizations`.
+          #    `customizations` is a standalone branch, not a fork of upstream, so
+          #    it shares no history with the tag we just checked out and cannot be
+          #    merged. Checking out an explicit file list is the overlay mechanism;
+          #    anything not listed here stays at pristine upstream.
           git fetch origin customizations
-          git merge --no-commit --no-ff origin/customizations || true
-
-          # 4) Re-apply BSD-portability file overlays (these shims rarely drift in upstream)
           rm -rf .github/workflows
           git checkout origin/customizations -- \
             cmd/cloudflared/generic_service.go \
@@ -119,28 +120,38 @@ jobs:
             Makefile \
             patches
 
-          # 5) Reset QUIC-related files to pristine upstream — the customizations
-          #    branch still carries stale full-file copies of these from an older
-          #    upstream base, which the step-3 merge leaves with conflict markers.
-          #    The .patch in step 6 replaces them with the surgical delta we care about.
-          #    (connection/errors_test.go from customizations is added net-new and
-          #    has no upstream counterpart; we leave it where step 3 placed it.)
-          git checkout "refs/tags/${TAG}" -- \
-            connection/errors.go \
-            connection/quic_connection.go \
-            supervisor/tunnel.go \
-            supervisor/tunnel_test.go
-
-          # 6) Apply surgical patches for QUIC behavior changes.
+          # 4) Apply surgical patches on top of the overlay.
           #    Patches express *intent* and survive surrounding upstream churn.
-          #    If a patch fails to apply, this fails the workflow loudly so a
-          #    human can re-derive the patch against the new upstream state.
-          for patch in patches/*.patch; do
-            echo "→ Applying ${patch}"
-            git apply --3way "${patch}"
+          #    A patch upstream has taken verbatim reverse-applies cleanly, which
+          #    is not a failure: skip it and say so. That check is textual, so it
+          #    only catches a verbatim adoption — upstream taking the idea but
+          #    rewording the surrounding code still lands in the failure branch,
+          #    which is why the error below names that case explicitly. The
+          #    reverse-check runs first because it inspects without writing, where
+          #    a failed --3way leaves conflict markers and unmerged index entries
+          #    that would then have to be unpicked from the step-3 overlay.
+          shopt -s nullglob
+          patches=(patches/*.patch)
+          shopt -u nullglob
+
+          if [ ${#patches[@]} -eq 0 ]; then
+            echo "No patches to apply."
+          fi
+
+          for patch in "${patches[@]}"; do
+            if git apply --reverse --check "${patch}" 2>/dev/null; then
+              echo "::notice::Skipping ${patch}: already present verbatim in upstream ${TAG}. Delete it from patches/."
+            elif git apply --3way "${patch}"; then
+              echo "Applied ${patch}"
+            else
+              echo "::error::${patch} no longer applies to upstream ${TAG}." >&2
+              echo "Check first whether upstream has adopted the change; if so, delete the patch." >&2
+              echo "Otherwise re-derive it against the current upstream sources. Either way, re-run after." >&2
+              exit 1
+            fi
           done
 
-          # 7) Finalise and push
+          # 5) Finalise and push
           git add -A
           git commit -m "chore: apply customizations on ${TAG}"
           git push --force-with-lease origin "${branch}"
