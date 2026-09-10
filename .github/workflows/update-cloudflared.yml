@@ -117,8 +117,12 @@ jobs:
             diagnostic/system_collector_unix.go \
             ingress/icmp_posix.go \
             ingress/icmp_posix_test.go \
-            Makefile \
             patches
+          # Makefile is deliberately NOT overlaid. It used to be a full-file copy
+          # frozen at an old upstream base, so it silently overrode every upstream
+          # Makefile change and broke releases twice (see patches/README.md History).
+          # The one BSD delta now lives in patches/ instead, which means upstream
+          # Makefile changes are inherited and drift fails loudly. Do not re-add it.
 
           # 4) Apply surgical patches on top of the overlay.
           #    Patches express *intent* and survive surrounding upstream churn.
