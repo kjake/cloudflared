@@ -27,7 +27,9 @@ chmod +x update-cloudflared.sh
 ./update-cloudflared.sh /usr/local/bin/cloudflared
 ```
 
-The script is short (~110 lines) and has no checksum verification — trust derives from `raw.githubusercontent.com` plus the public CI pipeline in [`.github/workflows/`](.github/workflows/). Skim it before running.
+Before anything is installed, the script verifies the download: CI publishes a `<asset>.sha256` digest next to every binary, and the script refuses to touch the destination if the SHA-256 doesn't match or if the downloaded binary won't run `--version`. The swap itself is an atomic same-filesystem rename, so an interrupted update can't leave a half-written binary in place.
+
+Releases from before checksum publishing (2026.9.0 and earlier) carry no digest; the script stops there as well, and `CLOUDFLARED_SKIP_CHECKSUM=1` overrides that for the one-off case. Trust in the digest itself still derives from `raw.githubusercontent.com` plus the public CI pipeline in [`.github/workflows/`](.github/workflows/) — the script is ~215 lines, so skim it before running.
 
 ## Service setup
 
