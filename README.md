@@ -1,6 +1,6 @@
 # cloudflared for *BSD
 
-This is a fork of [cloudflare/cloudflared](https://github.com/cloudflare/cloudflared) that ships official binaries for FreeBSD, NetBSD, and OpenBSD. Cloudflare doesn't publish *BSD builds; this fork adds a thin overlay of BSD-portability shims and a CI pipeline that builds inside real BSD VMs (not cross-compiled from Linux). The binary is functionally identical to upstream — same tunnels, WARP routing, SSH proxy, diagnostic, and ingress code paths. The only behavioral deviation is captured in [`patches/`](patches/), currently a single QUIC error-preservation tweak (see issue #10).
+This is a fork of [cloudflare/cloudflared](https://github.com/cloudflare/cloudflared) that ships official binaries for FreeBSD, NetBSD, and OpenBSD. Cloudflare doesn't publish *BSD builds; this fork adds a thin overlay of BSD-portability shims and a CI pipeline that builds inside real BSD VMs (not cross-compiled from Linux). The binary is functionally identical to upstream — same tunnels, WARP routing, SSH proxy, diagnostic, and ingress code paths. Any behavioral deviation from upstream is captured in [`patches/`](patches/); as of 2026.9.0 there are none, upstream having adopted this fork's QUIC error-preservation tweak (see issue #10).
 
 Upstream is polled every 12 hours; a new upstream release produces a matching release here, usually within a few hours of upstream's announcement.
 
@@ -83,7 +83,7 @@ Two branches matter:
 - **`customizations`** (default) — the persistent thin overlay. Contains the build workflows, BSD-portability shims for `diagnostic/` and `ingress/`, the BSD-aware `Makefile`, [`patches/`](patches/), the install script, and this README. Nothing else.
 - **`release-<tag>`** (auto-generated) — created on every new upstream release by [`.github/workflows/update-cloudflared.yml`](.github/workflows/update-cloudflared.yml). Starts from upstream's tag, overlays the customizations files, applies `patches/*.patch`, and force-pushes. These branches are throwaway build artifacts — don't open PRs against them.
 
-To contribute, open issues or PRs against `customizations`. Upstream bugs and feature requests should still go to [cloudflare/cloudflared](https://github.com/cloudflare/cloudflared); this fork has historically had a low rate of upstream patch acceptance, which is why it exists.
+To contribute, open issues or PRs against `customizations`. Upstream bugs and feature requests should still go to [cloudflare/cloudflared](https://github.com/cloudflare/cloudflared); upstream does accept patches from time to time, and a patch that lands there is removed from [`patches/`](patches/).
 
 ## Build provenance
 
