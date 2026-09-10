@@ -26,6 +26,18 @@ right place to record why the patch exists and what to do when it breaks.
 
 ## History
 
+- `0002-netbsd-makefile-os-detection.patch` — adds the `netbsd` arm to the
+  Makefile's `LOCAL_OS` detection ladder. Upstream has freebsd and openbsd but
+  never netbsd, so without it `go env GOOS` on NetBSD reaches the `$(error)` at
+  the end of the ladder and the build dies before the compiler runs. **Active.**
+
+  This replaced a full-file `Makefile` overlay frozen at a 2024-era upstream base
+  since 1f7d6f36 (May 2025). That copy silently overrode every upstream Makefile
+  change and broke releases twice in 2026.9.0: once via a stale patch (PR #18)
+  and once by retaining `-mod=vendor` after upstream de-vendored (PR #19). The
+  Makefile is no longer overlaid at all; this patch is the whole of the fork's
+  Makefile deviation.
+
 - `0001-preserve-quic-stream-error-causes.patch` — added `Cause` plus `Unwrap()`
   to `ControlStreamError`, `StreamListenerError`, and `DatagramManagerError` so
   `supervisor.isQuicBroken()` could see through them to the underlying
