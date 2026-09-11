@@ -1,5 +1,8 @@
 # cloudflared for *BSD
 
+> [!IMPORTANT]
+> **`update-cloudflared.sh` was updated as of the 2026.9.0 release.** It now verifies every download against GitHub's published SHA-256 and refuses to install a corrupt or truncated binary over a running tunnel. Older copies of the script do none of that — if you fetched yours before 2026.9.0, replace it with the current one from [Install or update](#install-or-update). Nothing about how you run it has changed.
+
 This is a fork of [cloudflare/cloudflared](https://github.com/cloudflare/cloudflared) that ships official binaries for FreeBSD, NetBSD, and OpenBSD. Cloudflare doesn't publish *BSD builds; this fork adds a thin overlay of BSD-portability shims and a CI pipeline that builds inside real BSD VMs (not cross-compiled from Linux). The binary is functionally identical to upstream — same tunnels, WARP routing, SSH proxy, diagnostic, and ingress code paths. Every deviation from upstream is captured in [`patches/`](patches/). As of 2026.9.0 the only one is a build-file portability fix (teaching the `Makefile` that NetBSD exists); there are no behavioral deviations, upstream having adopted this fork's QUIC error-preservation tweak (see issue #10).
 
 Upstream is polled every 12 hours; a new upstream release produces a matching release here, usually within a few hours of upstream's announcement.
@@ -27,7 +30,9 @@ chmod +x update-cloudflared.sh
 ./update-cloudflared.sh /usr/local/bin/cloudflared
 ```
 
-The script is short (~110 lines) and has no checksum verification — trust derives from `raw.githubusercontent.com` plus the public CI pipeline in [`.github/workflows/`](.github/workflows/). Skim it before running.
+Before anything is installed, the script verifies the download against two digests: the SHA-256 GitHub computes for every release asset at upload time and returns in its API, and a `<asset>.sha256` that CI publishes next to each binary. Any mismatch — or a binary that won't run `--version` — and the destination is left untouched. The swap itself is an atomic same-filesystem rename, so an interrupted update can't leave a half-written binary in place.
+
+GitHub's digests go back to the 2025.6.1 release here, so nothing needs to have been published with a `.sha256` for verification to work. Only releases older than that have nothing to check against; `CLOUDFLARED_SKIP_CHECKSUM=1` covers that case. Trust in the digests themselves still derives from `raw.githubusercontent.com` plus the public CI pipeline in [`.github/workflows/`](.github/workflows/) — the script is ~250 lines, so skim it before running.
 
 ## Service setup
 

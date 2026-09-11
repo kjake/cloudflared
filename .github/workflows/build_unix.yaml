@@ -198,8 +198,14 @@ jobs:
       - name: Upload build to GitHub Release
         run: |
           mv cloudflared ${{ matrix.assetName }}
+          # Publish a digest beside every binary so update-cloudflared.sh can
+          # reject a truncated or corrupted download before installing it over
+          # a running tunnel. GNU `sha256sum` format ("hash  name"), which the
+          # BSD digest tools in that script parse.
+          sha256sum ${{ matrix.assetName }} > ${{ matrix.assetName }}.sha256
           gh release upload "${{ steps.get_release.outputs.tag_name }}" \
             ${{ matrix.assetName }} \
+            ${{ matrix.assetName }}.sha256 \
             --clobber
 
       - name: Prune older successful runs
