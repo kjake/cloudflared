@@ -136,23 +136,43 @@ echo "→ Detected target: $FILENAME"
 API_URL="https://api.github.com/repos/kjake/cloudflared/releases/latest"
 RELEASE_JSON="$(curl -fsSL --retry 3 --retry-delay 2 "$API_URL")"
 
-# Match on the exact asset basename. A substring match on $FILENAME would also
-# hit "${FILENAME}.sha256" and could hand back the checksum file as the binary.
-asset_url() {
-  local want="$1" url
-  printf '%s\n' "$RELEASE_JSON" \
-    | grep '"browser_download_url"' \
-    | cut -d '"' -f4 \
-    | while IFS= read -r url; do
-        if [ "${url##*/}" = "$want" ]; then
-          printf '%s\n' "$url"
-          break
-        fi
-      done
+# Flatten the release into "<asset name> <digest or -> <url>" rows.
+#
+# GitHub hashes every asset as it is uploaded and returns that in the API
+# response as "digest": "sha256:…", which is how a download can be verified
+# even for releases published before this repo started shipping .sha256 assets.
+# The API pretty-prints one field per line and lists digest before
+# browser_download_url inside each asset object, so one pass can pair them up
+# without jq — none of the BSDs ship it by default.
+ASSET_ROWS="$(printf '%s\n' "$RELEASE_JSON" | awk '
+  /"digest":/ {
+    digest = "-"
+    if (match($0, /sha256:[0-9a-fA-F]+/)) {
+      digest = substr($0, RSTART + 7, RLENGTH - 7)
+    }
+    next
+  }
+  /"browser_download_url":/ {
+    url = $0
+    sub(/^[^:]*:[[:space:]]*"/, "", url)   # drop the key and the opening quote
+    sub(/".*$/, "", url)                   # drop the closing quote and comma
+    name = url
+    sub(/.*\//, "", name)
+    print name, digest, url
+    digest = "-"
+  }
+')"
+
+# Look assets up by exact name: a substring match on $FILENAME would also hit
+# "${FILENAME}.sha256" and could hand back the checksum file as the binary.
+asset_row() {
+  printf '%s\n' "$ASSET_ROWS" | awk -v want="$1" '$1 == want { print; exit }'
 }
 
-DOWNLOAD_URL="$(asset_url "$FILENAME")"
-CHECKSUM_URL="$(asset_url "$CHECKSUM_NAME")"
+BINARY_ROW="$(asset_row "$FILENAME")"
+DOWNLOAD_URL="$(printf '%s\n' "$BINARY_ROW" | awk '{ print $3 }')"
+API_DIGEST="$(printf '%s\n' "$BINARY_ROW" | awk '$2 != "-" { print $2 }')"
+CHECKSUM_URL="$(asset_row "$CHECKSUM_NAME" | awk '{ print $3 }')"
 
 if [ -z "$DOWNLOAD_URL" ]; then
   echo "Error: could not find download for $FILENAME" >&2
@@ -164,32 +184,48 @@ echo "→ Downloading $DOWNLOAD_URL …"
 # or 5xx and the script happily installs that as the binary.
 curl -fsSL --retry 3 --retry-delay 2 "$DOWNLOAD_URL" -o "$TMP"
 
+PUBLISHED_DIGEST=""
 if [ -n "$CHECKSUM_URL" ]; then
-  echo "→ Verifying $CHECKSUM_NAME …"
   curl -fsSL --retry 3 --retry-delay 2 "$CHECKSUM_URL" -o "$SUMFILE"
-
-  EXPECTED="$(extract_sha256 <"$SUMFILE")"
-  if [ -z "$EXPECTED" ]; then
+  PUBLISHED_DIGEST="$(extract_sha256 <"$SUMFILE")"
+  if [ -z "$PUBLISHED_DIGEST" ]; then
     echo "Error: $CHECKSUM_NAME contains no SHA-256 digest" >&2
     exit 1
   fi
+fi
 
-  ACTUAL="$(sha256_of "$TMP")"
-  if [ "$EXPECTED" != "$ACTUAL" ]; then
-    echo "Error: checksum mismatch — download is corrupt or tampered with." >&2
-    echo "  expected: $EXPECTED" >&2
+# check_digest <where it came from> <expected hash> — no-op when the source
+# published nothing.
+check_digest() {
+  [ -n "$2" ] || return 0
+  if [ "$2" != "$ACTUAL" ]; then
+    echo "Error: checksum mismatch against $1 — download is corrupt or tampered with." >&2
+    echo "  expected: $2" >&2
     echo "  actual:   $ACTUAL" >&2
     echo "$DEST was left untouched." >&2
     exit 1
   fi
-  echo "  checksum OK ($ACTUAL)"
-elif [ "${CLOUDFLARED_SKIP_CHECKSUM:-0}" = "1" ]; then
-  echo "Warning: release publishes no $CHECKSUM_NAME; continuing unverified" >&2
+  echo "  verified against $1"
+}
+
+if [ -z "$API_DIGEST" ] && [ -z "$PUBLISHED_DIGEST" ]; then
+  if [ "${CLOUDFLARED_SKIP_CHECKSUM:-0}" = "1" ]; then
+    echo "Warning: this release publishes no checksum; continuing unverified" >&2
+  else
+    echo "Error: this release publishes no checksum, so the download cannot be verified." >&2
+    echo "Only releases from before mid-2025 predate GitHub's asset digests. Re-run" >&2
+    echo "with CLOUDFLARED_SKIP_CHECKSUM=1 to install anyway." >&2
+    exit 1
+  fi
 else
-  echo "Error: release publishes no $CHECKSUM_NAME, so the download cannot be verified." >&2
-  echo "Releases from before checksum publishing have none. Re-run with" >&2
-  echo "CLOUDFLARED_SKIP_CHECKSUM=1 to install anyway." >&2
-  exit 1
+  echo "→ Verifying download…"
+  ACTUAL="$(sha256_of "$TMP")"
+  # Both sources are checked when both exist. The .sha256 asset is computed on
+  # the build host before upload and GitHub's digest after it received the
+  # bytes, so the two disagreeing means the upload itself was damaged.
+  check_digest "GitHub's published asset digest" "$API_DIGEST"
+  check_digest "$CHECKSUM_NAME" "$PUBLISHED_DIGEST"
+  echo "  checksum OK ($ACTUAL)"
 fi
 
 chmod +x "$TMP"

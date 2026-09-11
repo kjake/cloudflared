@@ -27,9 +27,9 @@ chmod +x update-cloudflared.sh
 ./update-cloudflared.sh /usr/local/bin/cloudflared
 ```
 
-Before anything is installed, the script verifies the download: CI publishes a `<asset>.sha256` digest next to every binary, and the script refuses to touch the destination if the SHA-256 doesn't match or if the downloaded binary won't run `--version`. The swap itself is an atomic same-filesystem rename, so an interrupted update can't leave a half-written binary in place.
+Before anything is installed, the script verifies the download against two digests: the SHA-256 GitHub computes for every release asset at upload time and returns in its API, and a `<asset>.sha256` that CI publishes next to each binary. Any mismatch — or a binary that won't run `--version` — and the destination is left untouched. The swap itself is an atomic same-filesystem rename, so an interrupted update can't leave a half-written binary in place.
 
-Releases from before checksum publishing (2026.9.0 and earlier) carry no digest; the script stops there as well, and `CLOUDFLARED_SKIP_CHECKSUM=1` overrides that for the one-off case. Trust in the digest itself still derives from `raw.githubusercontent.com` plus the public CI pipeline in [`.github/workflows/`](.github/workflows/) — the script is ~215 lines, so skim it before running.
+GitHub's digests go back to the 2025.6.1 release here, so nothing needs to have been published with a `.sha256` for verification to work. Only releases older than that have nothing to check against; `CLOUDFLARED_SKIP_CHECKSUM=1` covers that case. Trust in the digests themselves still derives from `raw.githubusercontent.com` plus the public CI pipeline in [`.github/workflows/`](.github/workflows/) — the script is ~250 lines, so skim it before running.
 
 ## Service setup
 
