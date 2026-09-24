@@ -97,6 +97,10 @@ else ifeq ($(LOCAL_OS),windows)
     TARGET_OS ?= windows
 else ifeq ($(LOCAL_OS),freebsd)
     TARGET_OS ?= freebsd
+# BSD fork delta: upstream ships freebsd and openbsd but not netbsd, so
+# without this branch `go env GOOS` on NetBSD hits the $(error) below.
+else ifeq ($(LOCAL_OS),netbsd)
+    TARGET_OS ?= netbsd
 else ifeq ($(LOCAL_OS),openbsd)
     TARGET_OS ?= openbsd
 else
