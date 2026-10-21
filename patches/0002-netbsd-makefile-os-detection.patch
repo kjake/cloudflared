@@ -1,0 +1,31 @@
+Teach the Makefile's OS-detection ladder about NetBSD.
+
+Upstream cloudflared builds on freebsd and openbsd but has never carried a
+netbsd branch, so `go env GOOS` on NetBSD falls straight through to the
+$(error) at the end of the ladder and `gmake cloudflared` dies before it ever
+invokes the compiler. Everything else in upstream's Makefile works unmodified
+on all three BSDs, which is why this is the fork's only Makefile deviation.
+
+This replaced a full-file Makefile overlay frozen at a 2024-era upstream base.
+That copy silently overrode every upstream Makefile change; when upstream
+de-vendored in 2026.9.0 the frozen copy kept `-mod=vendor` and all five BSD
+legs failed with `go: inconsistent vendoring`.
+
+If upstream ever adds netbsd itself, the `git apply --reverse --check` in
+.github/workflows/update-cloudflared.yml will detect it and tell you to delete
+this file.
+
+diff --git a/Makefile b/Makefile
+--- a/Makefile
++++ b/Makefile
+@@ -97,6 +97,10 @@ else ifeq ($(LOCAL_OS),windows)
+     TARGET_OS ?= windows
+ else ifeq ($(LOCAL_OS),freebsd)
+     TARGET_OS ?= freebsd
++# BSD fork delta: upstream ships freebsd and openbsd but not netbsd, so
++# without this branch `go env GOOS` on NetBSD hits the $(error) below.
++else ifeq ($(LOCAL_OS),netbsd)
++    TARGET_OS ?= netbsd
+ else ifeq ($(LOCAL_OS),openbsd)
+     TARGET_OS ?= openbsd
+ else
